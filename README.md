@@ -1,1 +1,3 @@
 # Click-Lake
+
+Initial commit
