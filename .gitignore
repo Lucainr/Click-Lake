@@ -27,3 +27,6 @@ coverage/
 
 # Local npm cache
 .npm-cache/
+
+# Python venv for server
+server/.venv/
