@@ -1,0 +1,25 @@
+{
+  "name": "clicklake-sdk",
+  "version": "0.1.0",
+  "description": "Click Lake browser SDK MVP for collecting commerce events.",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "analytics",
+    "sdk",
+    "click-lake"
+  ],
+  "author": "Click Lake",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}
