@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ClickLake SDK 데모</title>
+  </head>
+  <body>
+    <h1>ClickLake SDK Demo</h1>
+    <p>콘솔을 열어 payload 로그를 확인하세요.</p>
+
+    <script type="module">
+      import { ClickLake } from "../dist/index.mjs"
+
+      ClickLake.init({
+        sdkKey: "clk_live_demo",
+        endpoint: "http://localhost:8000/collect",
+        debug: true,
+        autoPageView: true,
+        batchSize: 5,
+        flushIntervalMs: 3000
+      })
+
+      // 예시: 수동 이벤트 전송
+      ClickLake.promotionView({
+        promotion_id: "promo_demo_001",
+        promotion_name: "데모 프로모션",
+        campaign_id: "camp_demo_001",
+        placement: "main_banner"
+      })
+    </script>
+  </body>
+</html>
