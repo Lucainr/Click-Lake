@@ -30,3 +30,8 @@ coverage/
 
 # Python venv for server
 server/.venv/
+__pycache__/
+*.pyc
+
+# Raw collected events (local runtime artifact)
+server/data/*.jsonl
