@@ -35,3 +35,5 @@ __pycache__/
 
 # Raw collected events (local runtime artifact)
 server/data/raw_events/
+server/data/checkpoints/
+server/out/bronze_batches/

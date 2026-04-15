@@ -10,11 +10,20 @@ server/
     schemas.py    # Pydantic 요청/응답 모델
     config.py     # 간단한 설정 (CORS 등)
     storage.py    # 날짜 파티션 + 파일 롤링 저장 로직
+  scripts/
+    export_raw_to_bronze.py
+    upload_bronze_batches_to_databricks.py
   data/
     raw_events/
       date=YYYY-MM-DD/
         events-0001.jsonl
         events-0002.jsonl
+    checkpoints/
+      bronze_export_state.json
+  out/
+    bronze_batches/
+      bronze_events_YYYYMMDDTHHMMSSZ.jsonl
+  .env.example
   requirements.txt
 ```
 
@@ -60,3 +69,114 @@ MAX_EVENTS_PER_FILE=500 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
   - 파일 롤링:
     - 기본 `max_events_per_file=1000`
     - 파일이 1000줄에 도달하면 `events-0002.jsonl` 같은 다음 파일로 저장
+
+## Raw -> Bronze Export (파일 단위)
+- 처리 단위: line offset이 아니라 `date=.../events-....jsonl` 파일 단위
+- 체크포인트: `data/checkpoints/bronze_export_state.json`
+- 체크포인트 구조:
+  ```json
+  {
+    "processed_files": [
+      "date=2026-04-15/events-0001.jsonl"
+    ]
+  }
+  ```
+
+실행:
+```bash
+cd server
+source .venv/bin/activate
+python scripts/export_raw_to_bronze.py
+```
+
+결과:
+- 신규 파일만 export
+- 출력: `out/bronze_batches/bronze_events_<timestamp>.jsonl`
+- 같은 파일은 다음 실행에서 재처리되지 않음
+
+확인:
+```bash
+cat data/checkpoints/bronze_export_state.json
+find out/bronze_batches -type f | sort
+```
+
+Databricks Bronze SQL:
+- `../sql/bronze/03_create_events_raw_json.sql`
+- `COPY INTO`의 `SOURCE_PATH`는 Databricks에서 접근 가능한 경로로 교체 필요
+
+## Bronze Batch -> Databricks Volume Upload
+- 입력: `out/bronze_batches/*.jsonl`
+- 출력 대상: `DATABRICKS_VOLUME_PATH`
+  - 예1: `/Volumes/workspace/clicklake_bronze/raw_files`
+  - 예2: `/Volumes/workspace/clicklake_bronze/raw_batches`
+- 체크포인트: `data/checkpoints/bronze_upload_state.json`
+- 체크포인트 구조:
+  ```json
+  {
+    "uploaded_files": [
+      "bronze_events_20260415T101500Z.jsonl"
+    ]
+  }
+  ```
+- 처리 순서: 파일명 오름차순
+- 성공한 파일만 checkpoint에 반영 (중복 업로드 방지)
+
+환경변수 설정:
+```bash
+cd server
+cp .env.example .env
+```
+업로드 스크립트는 `server/.env`를 자동으로 읽습니다.
+이미 셸에 export된 환경변수가 있으면 그 값을 우선 사용합니다.
+
+실행:
+```bash
+cd server
+source .venv/bin/activate
+python scripts/upload_bronze_batches_to_databricks.py
+```
+
+성공/재실행 예시:
+- `Uploaded bronze_events_20260415T101500Z.jsonl`
+- `No new batch files to upload.`
+
+Databricks 업로드 확인:
+0) 필요 시 Volume 생성:
+```sql
+CREATE VOLUME IF NOT EXISTS workspace.clicklake_bronze.raw_batches;
+```
+1) SQL Editor에서 Volume 파일 목록 확인
+```sql
+LIST '/Volumes/workspace/clicklake_bronze/raw_files';
+LIST '/Volumes/workspace/clicklake_bronze/raw_batches';
+```
+2) 파일 데이터 확인 (선택)
+```sql
+SELECT * FROM json.`/Volumes/workspace/clicklake_bronze/raw_files/*.jsonl` LIMIT 10;
+SELECT * FROM json.`/Volumes/workspace/clicklake_bronze/raw_batches/*.jsonl` LIMIT 10;
+```
+
+## End-to-End 검증 순서 (로컬 -> Databricks Bronze)
+1) Bronze batch 파일 생성
+```bash
+cd server
+source .venv/bin/activate
+python scripts/export_raw_to_bronze.py
+```
+2) Databricks Volume 업로드
+```bash
+python scripts/upload_bronze_batches_to_databricks.py
+```
+3) Databricks에서 업로드 파일 확인
+```sql
+LIST '/Volumes/workspace/clicklake_bronze/raw_files';
+```
+4) Bronze 테이블 생성 + 적재
+```sql
+-- sql/bronze/03_create_events_raw_json.sql 실행
+```
+5) 적재 결과 확인
+```sql
+SELECT COUNT(*) AS row_count
+FROM workspace.clicklake_bronze.events_raw_json;
+```
