@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import CollectRequest, CollectResponse, HealthResponse
 from .config import settings
-from .storage import append_raw_events_jsonl
+from .storage import append_raw_events_partitioned
 
 logger = logging.getLogger("clicklake.collector")
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -41,17 +41,22 @@ async def collect(payload: CollectRequest) -> CollectResponse:
     logger.debug("payload=%s", payload.json())
 
     try:
-        stored_count = append_raw_events_jsonl(
+        store_result = append_raw_events_partitioned(
             sdk_key=payload.sdk_key,
             events=payload.events,
-            file_path=settings.raw_events_abs_path,
+            base_dir=settings.raw_events_base_abs_dir,
+            base_rel_dir=settings.raw_events_base_rel_dir,
+            max_events_per_file=settings.max_events_per_file,
         )
     except OSError as exc:
         logger.exception("failed to store raw events")
         raise HTTPException(status_code=500, detail="failed to store raw events") from exc
+    except ValueError as exc:
+        logger.exception("invalid storage configuration")
+        raise HTTPException(status_code=500, detail="invalid storage configuration") from exc
 
     return CollectResponse(
         success=True,
-        received_events=stored_count,
-        stored_path=settings.raw_events_rel_path,
+        received_events=store_result.stored_count,
+        stored_dir=store_result.stored_dir_rel,
     )

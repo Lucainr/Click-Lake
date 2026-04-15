@@ -22,7 +22,7 @@ class CollectRequest(BaseModel):
 class CollectResponse(BaseModel):
     success: bool
     received_events: int
-    stored_path: str
+    stored_dir: str
 
 
 class HealthResponse(BaseModel):

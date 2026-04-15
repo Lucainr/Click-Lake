@@ -1,0 +1,3 @@
+{"received_at":"2026-04-15T03:54:15.090215Z","sdk_key":"clk_live_verify","event":{"event_id":"evt_b2","event_type":"product_view","event_time":"2026-04-15T10:00:03Z","session_id":"sess_1","page_url":"/p2"}}
+{"received_at":"2026-04-15T03:54:15.090215Z","sdk_key":"clk_live_verify","event":{"event_id":"evt_b3","event_type":"product_view","event_time":"2026-04-15T10:00:04Z","session_id":"sess_1","page_url":"/p3"}}
+{"received_at":"2026-04-15T03:54:15.090215Z","sdk_key":"clk_live_verify","event":{"event_id":"evt_b4","event_type":"add_to_cart","event_time":"2026-04-15T10:00:05Z","session_id":"sess_1","page_url":"/cart"}}
