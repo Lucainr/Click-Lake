@@ -1,6 +1,6 @@
-from typing import Any, List, Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel
 
 
 class Event(BaseModel):
@@ -15,25 +15,14 @@ class Event(BaseModel):
 
 
 class CollectRequest(BaseModel):
-    sdk_key: str = Field(..., description="Issued SDK key")
-    events: List[Event]
-
-    @validator("sdk_key")
-    def validate_sdk_key(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("sdk_key is required")
-        return v
-
-    @validator("events")
-    def validate_events(cls, v: List[Event]) -> List[Event]:
-        if not v:
-            raise ValueError("events must contain at least one item")
-        return v
+    sdk_key: Optional[str] = None
+    events: Optional[List[Event]] = None
 
 
 class CollectResponse(BaseModel):
     success: bool
     received_events: int
+    stored_path: str
 
 
 class HealthResponse(BaseModel):
