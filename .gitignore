@@ -34,4 +34,4 @@ __pycache__/
 *.pyc
 
 # Raw collected events (local runtime artifact)
-server/data/*.jsonl
+server/data/raw_events/
