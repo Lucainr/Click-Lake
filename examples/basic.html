@@ -3,13 +3,106 @@
   <head>
     <meta charset="UTF-8" />
     <title>ClickLake SDK 데모</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 24px;
+        line-height: 1.5;
+      }
+
+      .actions {
+        display: grid;
+        gap: 8px;
+        max-width: 480px;
+      }
+
+      button {
+        border: 1px solid #bbb;
+        border-radius: 8px;
+        background: #fff;
+        padding: 10px 12px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #f7f7f7;
+      }
+
+      code {
+        background: #f4f4f4;
+        border-radius: 4px;
+        padding: 1px 4px;
+      }
+    </style>
   </head>
   <body>
     <h1>ClickLake SDK Demo</h1>
-    <p>콘솔을 열어 payload 로그를 확인하세요.</p>
+    <p>콘솔을 열고 <code>[ClickLake] track ...</code> payload를 확인하세요.</p>
+    <p>아래 버튼은 실제 쇼핑몰 흐름처럼 이벤트를 발생시킵니다.</p>
+
+    <div class="actions">
+      <button id="btn-promo-view">1) promotion_view 발생</button>
+      <button id="btn-promo-click">2) promotion_click 발생</button>
+      <button id="btn-product-view">3) product_view 발생</button>
+      <button id="btn-add-to-cart">4) add_to_cart 발생</button>
+      <button id="btn-run-flow">전체 플로우 한 번에 실행</button>
+    </div>
 
     <script type="module">
       import { ClickLake } from "../dist/index.mjs"
+
+      const promotion = {
+        promotion_id: "promo_home_001",
+        promotion_name: "봄 아우터 기획전 배너",
+        campaign_id: "camp_spring_001",
+        campaign_name: "봄 패션 특가전",
+        placement: "main_hero",
+        creative_id: "creative_home_001",
+        creative_type: "image",
+        position_index: 1
+      }
+
+      const product = {
+        product_id: "prod_001",
+        product_name: "오버핏 트렌치 코트",
+        category_id: "cat_outer",
+        category_name: "아우터"
+      }
+
+      const sendPromotionView = () => {
+        ClickLake.promotionView({
+          ...promotion
+        })
+      }
+
+      const sendPromotionClick = () => {
+        ClickLake.promotionClick({
+          ...promotion,
+          click_target_url: "/products/prod_001",
+          click_x: 120,
+          click_y: 48
+        })
+      }
+
+      const sendProductView = () => {
+        ClickLake.productView({
+          ...product,
+          source_promotion_id: promotion.promotion_id,
+          source_campaign_id: promotion.campaign_id
+        })
+      }
+
+      const sendAddToCart = () => {
+        ClickLake.addToCart({
+          ...product,
+          quantity: 1,
+          unit_price: 129000,
+          currency: "KRW",
+          source_promotion_id: promotion.promotion_id,
+          source_campaign_id: promotion.campaign_id
+        })
+      }
 
       ClickLake.init({
         sdkKey: "clk_live_demo",
@@ -20,12 +113,16 @@
         flushIntervalMs: 3000
       })
 
-      // 예시: 수동 이벤트 전송
-      ClickLake.promotionView({
-        promotion_id: "promo_demo_001",
-        promotion_name: "데모 프로모션",
-        campaign_id: "camp_demo_001",
-        placement: "main_banner"
+      document.getElementById("btn-promo-view").addEventListener("click", sendPromotionView)
+      document.getElementById("btn-promo-click").addEventListener("click", sendPromotionClick)
+      document.getElementById("btn-product-view").addEventListener("click", sendProductView)
+      document.getElementById("btn-add-to-cart").addEventListener("click", sendAddToCart)
+
+      document.getElementById("btn-run-flow").addEventListener("click", () => {
+        sendPromotionView()
+        sendPromotionClick()
+        sendProductView()
+        sendAddToCart()
       })
     </script>
   </body>

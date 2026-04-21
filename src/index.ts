@@ -20,4 +20,12 @@ export const ClickLake = {
   flush
 }
 
-export type { SDKConfig, EventPayload, EventType } from "./types/event"
+export type {
+  SDKConfig,
+  EventPayload,
+  EventType,
+  PromotionViewInput,
+  PromotionClickInput,
+  ProductViewInput,
+  AddToCartInput
+} from "./types/event"
