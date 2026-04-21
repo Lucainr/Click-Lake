@@ -97,3 +97,58 @@ export interface SDKConfig {
   flushIntervalMs?: number
   batchSize?: number
 }
+
+export type PromotionViewInput = Pick<
+  PromotionViewEvent,
+  "promotion_id" | "promotion_name" | "campaign_id" | "placement"
+> &
+  Partial<
+    Pick<
+      PromotionViewEvent,
+      "campaign_name" | "creative_id" | "creative_type" | "position_index"
+    >
+  >
+
+export type PromotionClickInput = Pick<
+  PromotionClickEvent,
+  "promotion_id" | "promotion_name" | "campaign_id" | "placement"
+> &
+  Partial<
+    Pick<
+      PromotionClickEvent,
+      | "campaign_name"
+      | "creative_id"
+      | "creative_type"
+      | "position_index"
+      | "click_target_url"
+      | "click_x"
+      | "click_y"
+    >
+  >
+
+export type ProductViewInput = Pick<ProductViewEvent, "product_id"> &
+  Partial<
+    Pick<
+      ProductViewEvent,
+      | "product_name"
+      | "category_id"
+      | "category_name"
+      | "source_promotion_id"
+      | "source_campaign_id"
+    >
+  >
+
+export type AddToCartInput = Pick<AddToCartEvent, "product_id"> &
+  Partial<
+    Pick<
+      AddToCartEvent,
+      | "product_name"
+      | "category_id"
+      | "category_name"
+      | "quantity"
+      | "unit_price"
+      | "currency"
+      | "source_promotion_id"
+      | "source_campaign_id"
+    >
+  >
