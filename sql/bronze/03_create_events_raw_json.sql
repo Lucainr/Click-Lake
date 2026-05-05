@@ -1,5 +1,5 @@
 -- Click Lake Bronze JSON table (raw event payload preserved)
--- Adjust catalog/schema names and source path to your Databricks environment.
+-- Use explicit casting in COPY INTO to avoid schema merge/type conflicts.
 
 CREATE SCHEMA IF NOT EXISTS workspace.clicklake_bronze;
 
@@ -19,17 +19,44 @@ CREATE TABLE IF NOT EXISTS workspace.clicklake_bronze.events_raw_json (
 )
 USING DELTA;
 
--- Example load: export script output JSONL -> Bronze table
--- If your upload target is /Volumes/workspace/clicklake_bronze/raw_files:
-COPY INTO workspace.clicklake_bronze.events_raw_json
-FROM '/Volumes/workspace/clicklake_bronze/raw_files/*.jsonl'
-FILEFORMAT = JSON
-FORMAT_OPTIONS ('multiLine' = 'false')
-COPY_OPTIONS ('mergeSchema' = 'true');
-
 -- If your upload target is /Volumes/workspace/clicklake_bronze/raw_batches:
+COPY INTO workspace.clicklake_bronze.events_raw_json
+FROM (
+  SELECT
+    CAST(received_at AS STRING) AS received_at,
+    CAST(sdk_key AS STRING) AS sdk_key,
+    CAST(event_id AS STRING) AS event_id,
+    CAST(event_type AS STRING) AS event_type,
+    CAST(event_time AS STRING) AS event_time,
+    CAST(session_id AS STRING) AS session_id,
+    CAST(page_url AS STRING) AS page_url,
+    CAST(raw_event_json AS STRING) AS raw_event_json,
+    CAST(exported_at AS STRING) AS exported_at,
+    CAST(export_batch_id AS STRING) AS export_batch_id,
+    CAST(source_file AS STRING) AS source_file,
+    CAST(loaded_at AS STRING) AS loaded_at
+  FROM '/Volumes/workspace/clicklake_bronze/raw_batches/*.jsonl'
+)
+FILEFORMAT = JSON
+COPY_OPTIONS ('mergeSchema' = 'false');
+
+-- If your upload target is /Volumes/workspace/clicklake_bronze/raw_files, use this instead:
 -- COPY INTO workspace.clicklake_bronze.events_raw_json
--- FROM '/Volumes/workspace/clicklake_bronze/raw_batches/*.jsonl'
+-- FROM (
+--   SELECT
+--     CAST(received_at AS STRING) AS received_at,
+--     CAST(sdk_key AS STRING) AS sdk_key,
+--     CAST(event_id AS STRING) AS event_id,
+--     CAST(event_type AS STRING) AS event_type,
+--     CAST(event_time AS STRING) AS event_time,
+--     CAST(session_id AS STRING) AS session_id,
+--     CAST(page_url AS STRING) AS page_url,
+--     CAST(raw_event_json AS STRING) AS raw_event_json,
+--     CAST(exported_at AS STRING) AS exported_at,
+--     CAST(export_batch_id AS STRING) AS export_batch_id,
+--     CAST(source_file AS STRING) AS source_file,
+--     CAST(loaded_at AS STRING) AS loaded_at
+--   FROM '/Volumes/workspace/clicklake_bronze/raw_files/*.jsonl'
+-- )
 -- FILEFORMAT = JSON
--- FORMAT_OPTIONS ('multiLine' = 'false')
--- COPY_OPTIONS ('mergeSchema' = 'true');
+-- COPY_OPTIONS ('mergeSchema' = 'false');
