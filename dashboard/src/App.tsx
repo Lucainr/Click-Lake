@@ -20,9 +20,15 @@ const fetchJson = async <T,>(path: string): Promise<T> => {
 
 const formatInt = (value: number) => value.toLocaleString("ko-KR")
 const formatRatio = (value: number) => `${(value * 100).toFixed(2)}%`
+const formatSdkFilterLabel = (value: string) => (value === "all" ? "All SDK Keys" : value)
 
 const sortByDateDesc = <T extends { event_date: string }>(rows: T[]) =>
   [...rows].sort((a, b) => b.event_date.localeCompare(a.event_date))
+
+const renderRateBadge = (value: number) => {
+  const tone = value >= 0.5 ? "high" : value >= 0.2 ? "mid" : "low"
+  return <span className={`metric-badge metric-badge--${tone}`}>{formatRatio(value)}</span>
+}
 
 const App = () => {
   const [data, setData] = useState<DashboardData | null>(null)
@@ -91,21 +97,41 @@ const App = () => {
   }, [filtered])
 
   if (error) {
-    return <main className="app"><p className="error">{error}</p></main>
+    return (
+      <main className="app">
+        <div className="state-card state-card--error">
+          <h2>Failed to load dashboard data</h2>
+          <p>{error}</p>
+        </div>
+      </main>
+    )
   }
 
   if (!filtered || !healthSummary) {
-    return <main className="app"><p>Loading demo dashboard...</p></main>
+    return (
+      <main className="app">
+        <div className="state-card">
+          <h2>Loading dashboard...</h2>
+          <p>Collecting demo data files from local assets.</p>
+        </div>
+      </main>
+    )
   }
 
   return (
     <main className="app">
       <header className="hero">
-        <div>
+        <div className="hero-copy">
           <h1>Click Lake Demo Dashboard</h1>
-          <p>Gold JSON 집계를 빠르게 시연하기 위한 read-only 화면입니다.</p>
+          <p>JSON Gold metrics overview for health, promotion performance, and campaign funnel.</p>
+          <div className="hero-meta">
+            <span className="status-pill">Filter: {formatSdkFilterLabel(selectedSdkKey)}</span>
+            <span className="status-pill">Health Rows: {formatInt(filtered.health.length)}</span>
+            <span className="status-pill">Promotion Rows: {formatInt(filtered.promotion.length)}</span>
+            <span className="status-pill">Funnel Rows: {formatInt(filtered.funnel.length)}</span>
+          </div>
         </div>
-        <label>
+        <label className="hero-filter">
           SDK Key
           <select value={selectedSdkKey} onChange={(event) => setSelectedSdkKey(event.target.value)}>
             <option value="all">All</option>
@@ -122,36 +148,38 @@ const App = () => {
         <SectionHeader
           title="1) Health 요약"
           description="raw/valid/invalid 규모와 데이터 신선도를 확인합니다."
+          meta={`Rows: ${formatInt(filtered.health.length)}`}
         />
         <div className="summary-grid">
-          <SummaryCard label="Raw Events" value={formatInt(healthSummary.raw)} />
-          <SummaryCard label="Valid Events" value={formatInt(healthSummary.valid)} accent="good" />
-          <SummaryCard label="Invalid Events" value={formatInt(healthSummary.invalid)} accent="warn" />
-          <SummaryCard label="Invalid Ratio" value={formatRatio(healthSummary.ratio)} accent="danger" />
+          <SummaryCard label="총 이벤트" value={formatInt(healthSummary.raw)} hint="수집된 전체 이벤트" />
+          <SummaryCard label="정상 이벤트" value={formatInt(healthSummary.valid)} hint="검증 통과 이벤트" accent="good" />
+          <SummaryCard label="비정상 이벤트" value={formatInt(healthSummary.invalid)} hint="검증 실패 이벤트" accent="warn" />
+          <SummaryCard label="비정상 비율" value={formatRatio(healthSummary.ratio)} hint="비정상 / 총 이벤트 수" accent="danger" />
         </div>
         <DataTable
           columns={[
-            { key: "event_date", label: "event_date" },
-            { key: "sdk_key", label: "sdk_key" },
-            { key: "raw_event_count", label: "raw", align: "right", render: (v) => formatInt(Number(v)) },
-            { key: "valid_event_count", label: "valid", align: "right", render: (v) => formatInt(Number(v)) },
-            { key: "invalid_event_count", label: "invalid", align: "right", render: (v) => formatInt(Number(v)) },
+            { key: "event_date", label: "이벤트 일자" },
+            { key: "sdk_key", label: "SDK 키" },
+            { key: "raw_event_count", label: "총 이벤트수", align: "right", render: (v) => formatInt(Number(v)) },
+            { key: "valid_event_count", label: "정상 이벤트수", align: "right", render: (v) => formatInt(Number(v)) },
+            { key: "invalid_event_count", label: "비정상 이벤트수", align: "right", render: (v) => formatInt(Number(v)) },
             {
               key: "invalid_event_ratio",
-              label: "invalid_ratio",
+              label: "비정상 비율",
               align: "right",
-              render: (v) => formatRatio(Number(v))
+              render: (v) => renderRateBadge(Number(v)),
+              emphasize: true
             },
             {
               key: "distinct_sessions",
-              label: "distinct_sessions",
+              label: "고유 세션수",
               align: "right",
               render: (v) => formatInt(Number(v))
             },
-            { key: "latest_event_time", label: "latest_event_time" },
+            { key: "latest_event_time", label: "최종 이벤트시각" },
             {
               key: "freshness_minutes",
-              label: "freshness_minutes",
+              label: "신선도(분)",
               align: "right",
               render: (v) => (v === null ? "-" : formatInt(Number(v)))
             }
@@ -165,41 +193,44 @@ const App = () => {
         <SectionHeader
           title="2) Promotion Performance"
           description="CTR 및 post-click 성과를 프로모션 단위로 확인합니다."
+          meta={`Rows: ${formatInt(filtered.promotion.length)}`}
         />
         <DataTable
           columns={[
-            { key: "event_date", label: "event_date" },
-            { key: "sdk_key", label: "sdk_key" },
-            { key: "campaign_id", label: "campaign_id" },
-            { key: "promotion_id", label: "promotion_id" },
-            { key: "promotion_name", label: "promotion_name" },
-            { key: "placement", label: "placement" },
-            { key: "promotion_views", label: "views", align: "right", render: (v) => formatInt(Number(v)) },
-            { key: "promotion_clicks", label: "clicks", align: "right", render: (v) => formatInt(Number(v)) },
-            { key: "ctr", label: "ctr", align: "right", render: (v) => formatRatio(Number(v)) },
+            { key: "event_date", label: "이벤트 일자" },
+            { key: "sdk_key", label: "SDK 키" },
+            { key: "campaign_id", label: "캠페인 ID" },
+            { key: "promotion_id", label: "프로모션 ID" },
+            { key: "promotion_name", label: "프로모션명" },
+            { key: "placement", label: "노출 위치" },
+            { key: "promotion_views", label: "노출수", align: "right", render: (v) => formatInt(Number(v)) },
+            { key: "promotion_clicks", label: "클릭수", align: "right", render: (v) => formatInt(Number(v)) },
+            { key: "ctr", label: "CTR", align: "right", render: (v) => renderRateBadge(Number(v)), emphasize: true },
             {
               key: "product_views_after_click",
-              label: "pv_after_click",
+              label: "클릭후 상품조회",
               align: "right",
               render: (v) => formatInt(Number(v))
             },
             {
               key: "add_to_cart_after_click",
-              label: "atc_after_click",
+              label: "클릭후 장바구니",
               align: "right",
               render: (v) => formatInt(Number(v))
             },
             {
               key: "product_view_rate_after_click",
-              label: "pv_rate_after_click",
+              label: "클릭후 상품조회율",
               align: "right",
-              render: (v) => formatRatio(Number(v))
+              render: (v) => renderRateBadge(Number(v)),
+              emphasize: true
             },
             {
               key: "add_to_cart_rate_after_click",
-              label: "atc_rate_after_click",
+              label: "클릭후 장바구니율",
               align: "right",
-              render: (v) => formatRatio(Number(v))
+              render: (v) => renderRateBadge(Number(v)),
+              emphasize: true
             }
           ]}
           rows={filtered.promotion}
@@ -211,54 +242,58 @@ const App = () => {
         <SectionHeader
           title="3) Campaign Funnel"
           description="세션 기준 퍼널 전환율(view→click→product_view/add_to_cart)을 확인합니다."
+          meta={`Rows: ${formatInt(filtered.funnel.length)}`}
         />
         <DataTable
           columns={[
-            { key: "event_date", label: "event_date" },
-            { key: "sdk_key", label: "sdk_key" },
-            { key: "campaign_id", label: "campaign_id" },
-            { key: "campaign_name", label: "campaign_name" },
+            { key: "event_date", label: "이벤트 일자" },
+            { key: "sdk_key", label: "SDK 키" },
+            { key: "campaign_id", label: "캠페인 ID" },
+            { key: "campaign_name", label: "캠페인명" },
             {
               key: "promotion_view_sessions",
-              label: "view_sessions",
+              label: "조회 세션수",
               align: "right",
               render: (v) => formatInt(Number(v))
             },
             {
               key: "promotion_click_sessions",
-              label: "click_sessions",
+              label: "클릭 세션수",
               align: "right",
               render: (v) => formatInt(Number(v))
             },
             {
               key: "product_view_sessions",
-              label: "pv_sessions",
+              label: "상품조회 세션수",
               align: "right",
               render: (v) => formatInt(Number(v))
             },
             {
               key: "add_to_cart_sessions",
-              label: "atc_sessions",
+              label: "장바구니 세션수",
               align: "right",
               render: (v) => formatInt(Number(v))
             },
             {
               key: "view_to_click_rate",
-              label: "view_to_click_rate",
+              label: "조회→클릭 전환율",
               align: "right",
-              render: (v) => formatRatio(Number(v))
+              render: (v) => renderRateBadge(Number(v)),
+              emphasize: true
             },
             {
               key: "click_to_product_view_rate",
-              label: "click_to_pv_rate",
+              label: "클릭→상품조회 전환율",
               align: "right",
-              render: (v) => formatRatio(Number(v))
+              render: (v) => renderRateBadge(Number(v)),
+              emphasize: true
             },
             {
               key: "click_to_add_to_cart_rate",
-              label: "click_to_atc_rate",
+              label: "클릭→장바구니 전환율",
               align: "right",
-              render: (v) => formatRatio(Number(v))
+              render: (v) => renderRateBadge(Number(v)),
+              emphasize: true
             }
           ]}
           rows={filtered.funnel}
