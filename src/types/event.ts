@@ -96,6 +96,7 @@ export interface SDKConfig {
   autoPageView?: boolean
   flushIntervalMs?: number
   batchSize?: number
+  maxRetries?: number
 }
 
 export type PromotionViewInput = Pick<
