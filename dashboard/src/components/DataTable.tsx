@@ -12,7 +12,7 @@ export const DataTable = <T extends object>({
   rowKey
 }: DataTableProps<T>) => {
   if (!rows.length) {
-    return <p className="empty">No rows</p>
+    return <div className="empty">No data available for this section.</div>
   }
 
   return (
@@ -38,7 +38,13 @@ export const DataTable = <T extends object>({
                     : String(rawValue ?? "-")
 
                 return (
-                  <td key={String(column.key)} className={column.align === "right" ? "align-right" : "align-left"}>
+                  <td
+                    key={String(column.key)}
+                    className={[
+                      column.align === "right" ? "align-right" : "align-left",
+                      column.emphasize ? "cell-emphasize" : ""
+                    ].join(" ").trim()}
+                  >
                     {text}
                   </td>
                 )

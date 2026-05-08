@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+
 export interface HealthRow {
   event_date: string
   sdk_key: string
@@ -45,5 +47,6 @@ export interface Column<T> {
   key: keyof T
   label: string
   align?: "left" | "right"
-  render?: (value: T[keyof T], row: T) => string
+  render?: (value: T[keyof T], row: T) => ReactNode
+  emphasize?: boolean
 }
