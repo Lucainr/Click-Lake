@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .schemas import CollectRequest, CollectResponse, HealthResponse
 from .config import settings
 from .storage import append_raw_events_partitioned
+from .routes.gold import router as gold_router
 
 logger = logging.getLogger("clicklake.collector")
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -19,6 +20,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(gold_router)
 
 
 @app.get("/health", response_model=HealthResponse)

@@ -10,10 +10,27 @@ interface DashboardData {
   funnel: CampaignFunnelRow[]
 }
 
+const defaultLocalApiBase =
+  typeof window !== "undefined" && window.location.port === "5173"
+    ? "http://localhost:8000"
+    : ""
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? defaultLocalApiBase).replace(/\/+$/, "")
+
+const buildApiUrl = (path: string) => {
+  if (!API_BASE_URL) return path
+  return `${API_BASE_URL}${path}`
+}
+
 const fetchJson = async <T,>(path: string): Promise<T> => {
-  const response = await fetch(path)
+  const url = buildApiUrl(path)
+  const response = await fetch(url)
   if (!response.ok) {
     throw new Error(`Failed to load ${path}`)
+  }
+  const contentType = response.headers.get("content-type") ?? ""
+  if (!contentType.includes("application/json")) {
+    const body = await response.text()
+    throw new Error(`Expected JSON from ${url}, received: ${body.slice(0, 60)}`)
   }
   return (await response.json()) as T
 }
@@ -39,9 +56,9 @@ const App = () => {
     const load = async () => {
       try {
         const [health, promotion, funnel] = await Promise.all([
-          fetchJson<HealthRow[]>("/demo-data/health.json"),
-          fetchJson<PromotionPerformanceRow[]>("/demo-data/promotion_performance.json"),
-          fetchJson<CampaignFunnelRow[]>("/demo-data/campaign_funnel.json")
+          fetchJson<HealthRow[]>("/api/gold/health"),
+          fetchJson<PromotionPerformanceRow[]>("/api/gold/promotion-performance"),
+          fetchJson<CampaignFunnelRow[]>("/api/gold/campaign-funnel")
         ])
 
         setData({
