@@ -16,6 +16,8 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*
+!.env.example
+!server/.env.example
 
 # OS / editor
 .DS_Store

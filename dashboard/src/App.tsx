@@ -21,6 +21,12 @@ const buildApiUrl = (path: string) => {
   return `${API_BASE_URL}${path}`
 }
 
+const withSdkKeyQuery = (path: string, sdkKey: string) => {
+  if (sdkKey === "all") return path
+  const params = new URLSearchParams({ sdk_key: sdkKey })
+  return `${path}?${params.toString()}`
+}
+
 const fetchJson = async <T,>(path: string): Promise<T> => {
   const url = buildApiUrl(path)
   const response = await fetch(url)
@@ -50,17 +56,50 @@ const renderRateBadge = (value: number) => {
 const App = () => {
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState<boolean>(true)
   const [selectedSdkKey, setSelectedSdkKey] = useState<string>("all")
+  const [sdkKeyOptions, setSdkKeyOptions] = useState<string[]>([])
 
   useEffect(() => {
+    let cancelled = false
+
+    const loadSdkKeyOptions = async () => {
+      try {
+        const healthRows = await fetchJson<HealthRow[]>("/api/gold/health")
+        if (cancelled) return
+
+        const keys = [...new Set(healthRows.map((row) => row.sdk_key))].sort()
+        setSdkKeyOptions(keys)
+      } catch {
+        if (cancelled) return
+        setSdkKeyOptions([])
+      }
+    }
+
+    void loadSdkKeyOptions()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
     const load = async () => {
+      setLoading(true)
+      setError(null)
+
       try {
         const [health, promotion, funnel] = await Promise.all([
-          fetchJson<HealthRow[]>("/api/gold/health"),
-          fetchJson<PromotionPerformanceRow[]>("/api/gold/promotion-performance"),
-          fetchJson<CampaignFunnelRow[]>("/api/gold/campaign-funnel")
+          fetchJson<HealthRow[]>(withSdkKeyQuery("/api/gold/health", selectedSdkKey)),
+          fetchJson<PromotionPerformanceRow[]>(
+            withSdkKeyQuery("/api/gold/promotion-performance", selectedSdkKey)
+          ),
+          fetchJson<CampaignFunnelRow[]>(withSdkKeyQuery("/api/gold/campaign-funnel", selectedSdkKey))
         ])
 
+        if (cancelled) return
         setData({
           health: sortByDateDesc(health),
           promotion: [...promotion].sort((a, b) => {
@@ -75,43 +114,30 @@ const App = () => {
           })
         })
       } catch (loadError) {
+        if (cancelled) return
         setError(loadError instanceof Error ? loadError.message : "Unknown error")
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
 
     void load()
-  }, [])
 
-  const sdkKeyOptions = useMemo(() => {
-    if (!data) return []
-    const keys = new Set<string>()
-    data.health.forEach((row) => keys.add(row.sdk_key))
-    data.promotion.forEach((row) => keys.add(row.sdk_key))
-    data.funnel.forEach((row) => keys.add(row.sdk_key))
-    return [...keys].sort()
-  }, [data])
-
-  const filtered = useMemo(() => {
-    if (!data) return null
-    if (selectedSdkKey === "all") return data
-
-    return {
-      health: data.health.filter((row) => row.sdk_key === selectedSdkKey),
-      promotion: data.promotion.filter((row) => row.sdk_key === selectedSdkKey),
-      funnel: data.funnel.filter((row) => row.sdk_key === selectedSdkKey)
+    return () => {
+      cancelled = true
     }
-  }, [data, selectedSdkKey])
+  }, [selectedSdkKey])
 
   const healthSummary = useMemo(() => {
-    if (!filtered) return null
+    if (!data) return null
 
-    const raw = filtered.health.reduce((sum, row) => sum + row.raw_event_count, 0)
-    const valid = filtered.health.reduce((sum, row) => sum + row.valid_event_count, 0)
-    const invalid = filtered.health.reduce((sum, row) => sum + row.invalid_event_count, 0)
+    const raw = data.health.reduce((sum, row) => sum + row.raw_event_count, 0)
+    const valid = data.health.reduce((sum, row) => sum + row.valid_event_count, 0)
+    const invalid = data.health.reduce((sum, row) => sum + row.invalid_event_count, 0)
     const ratio = raw === 0 ? 0 : invalid / raw
 
     return { raw, valid, invalid, ratio }
-  }, [filtered])
+  }, [data])
 
   if (error) {
     return (
@@ -124,12 +150,12 @@ const App = () => {
     )
   }
 
-  if (!filtered || !healthSummary) {
+  if (loading || !data || !healthSummary) {
     return (
       <main className="app">
         <div className="state-card">
           <h2>Loading dashboard...</h2>
-          <p>Collecting demo data files from local assets.</p>
+          <p>Reading read-only data from FastAPI Gold API endpoints.</p>
         </div>
       </main>
     )
@@ -143,9 +169,9 @@ const App = () => {
           <p>JSON Gold metrics overview for health, promotion performance, and campaign funnel.</p>
           <div className="hero-meta">
             <span className="status-pill">Filter: {formatSdkFilterLabel(selectedSdkKey)}</span>
-            <span className="status-pill">Health Rows: {formatInt(filtered.health.length)}</span>
-            <span className="status-pill">Promotion Rows: {formatInt(filtered.promotion.length)}</span>
-            <span className="status-pill">Funnel Rows: {formatInt(filtered.funnel.length)}</span>
+            <span className="status-pill">Health Rows: {formatInt(data.health.length)}</span>
+            <span className="status-pill">Promotion Rows: {formatInt(data.promotion.length)}</span>
+            <span className="status-pill">Funnel Rows: {formatInt(data.funnel.length)}</span>
           </div>
         </div>
         <label className="hero-filter">
@@ -165,7 +191,7 @@ const App = () => {
         <SectionHeader
           title="1) Health 요약"
           description="raw/valid/invalid 규모와 데이터 신선도를 확인합니다."
-          meta={`Rows: ${formatInt(filtered.health.length)}`}
+          meta={`Rows: ${formatInt(data.health.length)}`}
         />
         <div className="summary-grid">
           <SummaryCard label="총 이벤트" value={formatInt(healthSummary.raw)} hint="수집된 전체 이벤트" />
@@ -201,7 +227,7 @@ const App = () => {
               render: (v) => (v === null ? "-" : formatInt(Number(v)))
             }
           ]}
-          rows={filtered.health}
+          rows={data.health}
           rowKey={(row) => `${row.event_date}-${row.sdk_key}`}
         />
       </section>
@@ -210,7 +236,7 @@ const App = () => {
         <SectionHeader
           title="2) Promotion Performance"
           description="CTR 및 post-click 성과를 프로모션 단위로 확인합니다."
-          meta={`Rows: ${formatInt(filtered.promotion.length)}`}
+          meta={`Rows: ${formatInt(data.promotion.length)}`}
         />
         <DataTable
           columns={[
@@ -250,7 +276,7 @@ const App = () => {
               emphasize: true
             }
           ]}
-          rows={filtered.promotion}
+          rows={data.promotion}
           rowKey={(row, index) => `${row.event_date}-${row.sdk_key}-${row.promotion_id}-${index}`}
         />
       </section>
@@ -259,7 +285,7 @@ const App = () => {
         <SectionHeader
           title="3) Campaign Funnel"
           description="세션 기준 퍼널 전환율(view→click→product_view/add_to_cart)을 확인합니다."
-          meta={`Rows: ${formatInt(filtered.funnel.length)}`}
+          meta={`Rows: ${formatInt(data.funnel.length)}`}
         />
         <DataTable
           columns={[
@@ -313,7 +339,7 @@ const App = () => {
               emphasize: true
             }
           ]}
-          rows={filtered.funnel}
+          rows={data.funnel}
           rowKey={(row) => `${row.event_date}-${row.sdk_key}-${row.campaign_id}`}
         />
       </section>

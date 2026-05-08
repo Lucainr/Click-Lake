@@ -14,15 +14,11 @@ server/
     routes/
       gold.py     # Gold read-only API endpoint
     services/
-      gold_data.py # Gold 조회 데이터 로딩 서비스(현재 JSON 파일)
+      gold_data.py # Gold 조회 데이터 로딩 서비스(Databricks SQL)
   scripts/
     export_raw_to_bronze.py
     upload_bronze_batches_to_databricks.py
   data/
-    api/
-      health.json
-      promotion_performance.json
-      campaign_funnel.json
     raw_events/
       date=YYYY-MM-DD/
         events-0001.jsonl
@@ -83,8 +79,25 @@ MAX_EVENTS_PER_FILE=500 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
     - 파일이 1000줄에 도달하면 `events-0002.jsonl` 같은 다음 파일로 저장
 
 ### Gold read-only API 데이터 소스
-- 현재 단계에서는 `server/data/api/*.json` 파일을 읽어서 반환합니다.
-- 나중에 Databricks live query로 전환할 때는 `app/services/gold_data.py`만 교체하면 됩니다.
+- 현재 단계에서는 Databricks SQL Warehouse를 직접 조회합니다.
+- 조회 대상 테이블:
+  - `workspace.clicklake_gold.gold_workspace_health_daily_json`
+  - `workspace.clicklake_gold.gold_promotion_performance_daily_json`
+  - `workspace.clicklake_gold.gold_campaign_funnel_daily_json`
+- `sdk_key` 쿼리가 있으면 SQL `WHERE sdk_key = ?`로 서버 측 필터링합니다.
+
+필수 환경변수:
+```env
+DATABRICKS_HOST=https://<workspace-host>
+DATABRICKS_TOKEN=<pat-token>
+DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/<warehouse-id>
+```
+
+설정 예시:
+```bash
+cd server
+cp .env.example .env
+```
 
 ## Raw -> Bronze Export (파일 단위)
 - 처리 단위: line offset이 아니라 `date=.../events-....jsonl` 파일 단위

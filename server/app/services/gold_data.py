@@ -1,48 +1,154 @@
-import json
-from pathlib import Path
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
+from urllib.parse import urlparse
 
 from ..config import settings
 
+HEALTH_TABLE = "workspace.clicklake_gold.gold_workspace_health_daily_json"
+PROMOTION_TABLE = "workspace.clicklake_gold.gold_promotion_performance_daily_json"
+FUNNEL_TABLE = "workspace.clicklake_gold.gold_campaign_funnel_daily_json"
 
-def _read_json_rows(file_name: str) -> list[dict[str, Any]]:
-    file_path = settings.gold_api_data_abs_dir / file_name
-    if not file_path.exists():
-        return []
+HEALTH_COLUMNS = [
+    "event_date",
+    "sdk_key",
+    "raw_event_count",
+    "valid_event_count",
+    "invalid_event_count",
+    "invalid_event_ratio",
+    "distinct_sessions",
+    "latest_event_time",
+    "freshness_minutes",
+]
 
-    with file_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+PROMOTION_COLUMNS = [
+    "event_date",
+    "sdk_key",
+    "campaign_id",
+    "campaign_name",
+    "promotion_id",
+    "promotion_name",
+    "placement",
+    "promotion_views",
+    "promotion_clicks",
+    "ctr",
+    "product_views_after_click",
+    "add_to_cart_after_click",
+    "product_view_rate_after_click",
+    "add_to_cart_rate_after_click",
+]
 
-    if not isinstance(data, list):
-        raise ValueError(f"{file_path} must be a JSON array")
+FUNNEL_COLUMNS = [
+    "event_date",
+    "sdk_key",
+    "campaign_id",
+    "campaign_name",
+    "promotion_view_sessions",
+    "promotion_click_sessions",
+    "product_view_sessions",
+    "add_to_cart_sessions",
+    "view_to_click_rate",
+    "click_to_product_view_rate",
+    "click_to_add_to_cart_rate",
+]
 
-    return [row for row in data if isinstance(row, dict)]
+
+def _normalized_host() -> str:
+    host = (settings.databricks_host or "").strip()
+    if not host:
+        raise ValueError("Missing DATABRICKS_HOST")
+    if host.startswith("http://") or host.startswith("https://"):
+        parsed = urlparse(host)
+        if not parsed.hostname:
+            raise ValueError("Invalid DATABRICKS_HOST")
+        return parsed.hostname
+    return host
 
 
-def _filter_by_sdk_key(rows: list[dict[str, Any]], sdk_key: str | None) -> list[dict[str, Any]]:
-    if not sdk_key:
-        return rows
-    target = sdk_key.strip()
-    if not target:
-        return rows
-    return [row for row in rows if str(row.get("sdk_key", "")).strip() == target]
+def _databricks_credentials() -> tuple[str, str, str]:
+    host = _normalized_host()
+    token = (settings.databricks_token or "").strip()
+    http_path = (settings.databricks_http_path or "").strip()
+
+    missing: list[str] = []
+    if not token:
+        missing.append("DATABRICKS_TOKEN")
+    if not http_path:
+        missing.append("DATABRICKS_HTTP_PATH")
+
+    if missing:
+        raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+    return host, token, http_path
+
+
+def _serialize_value(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
+
+
+def _build_query(table_name: str, columns: list[str], sdk_key: str | None) -> tuple[str, list[Any]]:
+    select_columns = ", ".join(columns)
+    query = f"SELECT {select_columns} FROM {table_name}"
+    parameters: list[Any] = []
+
+    if sdk_key and sdk_key.strip():
+        query += " WHERE sdk_key = ?"
+        parameters.append(sdk_key.strip())
+
+    query += " ORDER BY event_date DESC"
+    return query, parameters
+
+
+def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> list[dict[str, Any]]:
+    host, token, http_path = _databricks_credentials()
+    query, params = _build_query(table_name, columns, sdk_key)
+
+    try:
+        from databricks import sql
+    except ImportError as exc:
+        raise RuntimeError(
+            "databricks-sql-connector is not installed. Run: pip install -r requirements.txt"
+        ) from exc
+
+    try:
+        with sql.connect(
+            server_hostname=host,
+            http_path=http_path,
+            access_token=token,
+        ) as connection:
+            with connection.cursor() as cursor:
+                if params:
+                    cursor.execute(query, params)
+                else:
+                    cursor.execute(query)
+                rows = cursor.fetchall()
+                column_names = [col[0] for col in (cursor.description or [])]
+    except Exception as exc:
+        raise RuntimeError(f"Databricks query failed for {table_name}: {exc}") from exc
+
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        mapped = {
+            column_names[idx]: _serialize_value(value)
+            for idx, value in enumerate(row)
+            if idx < len(column_names)
+        }
+        result.append(mapped)
+    return result
 
 
 def get_health_rows(sdk_key: str | None = None) -> list[dict[str, Any]]:
-    rows = _read_json_rows("health.json")
-    return _filter_by_sdk_key(rows, sdk_key)
+    return _query_rows(HEALTH_TABLE, HEALTH_COLUMNS, sdk_key)
 
 
 def get_promotion_performance_rows(sdk_key: str | None = None) -> list[dict[str, Any]]:
-    rows = _read_json_rows("promotion_performance.json")
-    return _filter_by_sdk_key(rows, sdk_key)
+    return _query_rows(PROMOTION_TABLE, PROMOTION_COLUMNS, sdk_key)
 
 
 def get_campaign_funnel_rows(sdk_key: str | None = None) -> list[dict[str, Any]]:
-    rows = _read_json_rows("campaign_funnel.json")
-    return _filter_by_sdk_key(rows, sdk_key)
-
-
-def ensure_data_dir() -> Path:
-    settings.gold_api_data_abs_dir.mkdir(parents=True, exist_ok=True)
-    return settings.gold_api_data_abs_dir
+    return _query_rows(FUNNEL_TABLE, FUNNEL_COLUMNS, sdk_key)
