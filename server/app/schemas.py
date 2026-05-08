@@ -45,10 +45,10 @@ class GoldPromotionPerformanceRow(BaseModel):
     event_date: str
     sdk_key: str
     campaign_id: str
-    campaign_name: str
+    campaign_name: Optional[str] = None
     promotion_id: str
-    promotion_name: str
-    placement: str
+    promotion_name: Optional[str] = None
+    placement: Optional[str] = None
     promotion_views: int
     promotion_clicks: int
     ctr: float
