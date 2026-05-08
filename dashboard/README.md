@@ -10,15 +10,21 @@ Gold 집계 결과를 시연하기 위한 로컬 조회 화면입니다.
   - 이후 API 연동으로 확장하기 쉬움
 
 ## 데이터 소스
-현재는 mock JSON 파일 사용:
-- `public/demo-data/health.json`
-- `public/demo-data/promotion_performance.json`
-- `public/demo-data/campaign_funnel.json`
+FastAPI read-only API 사용:
+- `GET /api/gold/health`
+- `GET /api/gold/promotion-performance`
+- `GET /api/gold/campaign-funnel`
+
+기본값은 same-origin(`""`)이며, 로컬 개발에서 프론트/백엔드 포트가 다르면
+`VITE_API_BASE_URL`을 설정합니다.
+Vite dev server는 `/api`를 `http://localhost:8000`으로 프록시하도록 설정되어 있습니다.
 
 ## 실행 방법
 ```bash
 cd dashboard
 npm install
+# 필요 시 API 베이스 설정
+# export VITE_API_BASE_URL=http://localhost:8000
 npm run dev
 ```
 
@@ -40,12 +46,9 @@ npm run dev
 - 상단 SDK Key 필터(`All` 포함)
 
 ## 실제 Databricks live 데이터로 전환하려면
-1. `src/App.tsx`의 `fetch("/demo-data/*.json")` 부분을 API 호출로 교체
-2. 예시 API 형태
-   - `GET /api/gold/health`
-   - `GET /api/gold/promotion-performance`
-   - `GET /api/gold/campaign-funnel`
-3. 응답 스키마를 현재 JSON 컬럼명과 동일하게 유지하면 UI 수정 최소화 가능
+1. `server/app/services/gold_data.py`의 JSON 로딩 로직을 Databricks 조회 로직으로 교체
+2. API 응답 스키마(컬럼명)는 동일 유지
+3. dashboard는 별도 수정 없이 그대로 조회 가능
 
 ## 참고
 - 이 대시보드는 **read-only 시연용 MVP**입니다.
