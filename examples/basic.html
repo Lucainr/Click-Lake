@@ -47,6 +47,7 @@
       <button id="btn-product-view">3) product_view 발생</button>
       <button id="btn-add-to-cart">4) add_to_cart 발생</button>
       <button id="btn-run-flow">전체 플로우 한 번에 실행</button>
+      <button id="btn-flush">queue 즉시 flush</button>
     </div>
 
     <script type="module">
@@ -110,7 +111,8 @@
         debug: true,
         autoPageView: true,
         batchSize: 5,
-        flushIntervalMs: 3000
+        flushIntervalMs: 3000,
+        maxRetries: 2
       })
 
       document.getElementById("btn-promo-view").addEventListener("click", sendPromotionView)
@@ -123,6 +125,9 @@
         sendPromotionClick()
         sendProductView()
         sendAddToCart()
+      })
+      document.getElementById("btn-flush").addEventListener("click", () => {
+        ClickLake.flush()
       })
     </script>
   </body>
