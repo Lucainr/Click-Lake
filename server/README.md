@@ -244,6 +244,7 @@ python scripts/run_pipeline.py
 
 옵션:
 ```bash
+python scripts/run_pipeline.py --dry-run
 python scripts/run_pipeline.py --skip-export
 python scripts/run_pipeline.py --skip-upload
 python scripts/run_pipeline.py --skip-sql
@@ -251,6 +252,14 @@ python scripts/run_pipeline.py --bronze-only
 python scripts/run_pipeline.py --silver-only
 python scripts/run_pipeline.py --gold-only
 ```
+
+Dry-run 예시:
+```bash
+python scripts/run_pipeline.py --dry-run --skip-upload
+python scripts/run_pipeline.py --dry-run --gold-only
+```
+
+`--dry-run`은 실행 예정 단계/SQL 파일/skip 항목만 출력하고 실제 명령은 수행하지 않습니다.
 
 필수 환경변수:
 - `DATABRICKS_HOST`

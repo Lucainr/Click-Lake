@@ -38,6 +38,7 @@ GOLD_SQL_FILES = [
 class Step:
     name: str
     action: Callable[[], None]
+    sql_files: tuple[Path, ...] = ()
 
 
 class PipelineStepError(Exception):
@@ -75,11 +76,29 @@ def _build_steps(args: argparse.Namespace) -> list[Step]:
     steps: list[Step] = []
 
     if args.bronze_only:
-        return [Step("Bronze SQL", lambda: _run_sql_group("Bronze SQL", BRONZE_SQL_FILES))]
+        return [
+            Step(
+                "Bronze SQL",
+                lambda: _run_sql_group("Bronze SQL", BRONZE_SQL_FILES),
+                tuple(BRONZE_SQL_FILES),
+            )
+        ]
     if args.silver_only:
-        return [Step("Silver SQL", lambda: _run_sql_group("Silver SQL", SILVER_SQL_FILES))]
+        return [
+            Step(
+                "Silver SQL",
+                lambda: _run_sql_group("Silver SQL", SILVER_SQL_FILES),
+                tuple(SILVER_SQL_FILES),
+            )
+        ]
     if args.gold_only:
-        return [Step("Gold SQL", lambda: _run_sql_group("Gold SQL", GOLD_SQL_FILES))]
+        return [
+            Step(
+                "Gold SQL",
+                lambda: _run_sql_group("Gold SQL", GOLD_SQL_FILES),
+                tuple(GOLD_SQL_FILES),
+            )
+        ]
 
     if not args.skip_export:
         steps.append(Step("Export raw to bronze batch", _run_export_step))
@@ -87,15 +106,34 @@ def _build_steps(args: argparse.Namespace) -> list[Step]:
         steps.append(Step("Upload bronze batch files", _run_upload_step))
 
     if not args.skip_sql:
-        steps.append(Step("Run Bronze SQL", lambda: _run_sql_group("Bronze SQL", BRONZE_SQL_FILES)))
-        steps.append(Step("Run Silver SQL", lambda: _run_sql_group("Silver SQL", SILVER_SQL_FILES)))
-        steps.append(Step("Run Gold SQL", lambda: _run_sql_group("Gold SQL", GOLD_SQL_FILES)))
+        steps.append(
+            Step(
+                "Run Bronze SQL",
+                lambda: _run_sql_group("Bronze SQL", BRONZE_SQL_FILES),
+                tuple(BRONZE_SQL_FILES),
+            )
+        )
+        steps.append(
+            Step(
+                "Run Silver SQL",
+                lambda: _run_sql_group("Silver SQL", SILVER_SQL_FILES),
+                tuple(SILVER_SQL_FILES),
+            )
+        )
+        steps.append(
+            Step(
+                "Run Gold SQL",
+                lambda: _run_sql_group("Gold SQL", GOLD_SQL_FILES),
+                tuple(GOLD_SQL_FILES),
+            )
+        )
 
     return steps
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Click Lake pipeline end-to-end")
+    parser.add_argument("--dry-run", action="store_true", help="Print execution plan without running steps")
     parser.add_argument("--skip-export", action="store_true", help="Skip export_raw_to_bronze step")
     parser.add_argument("--skip-upload", action="store_true", help="Skip upload_bronze_batches step")
     parser.add_argument("--skip-sql", action="store_true", help="Skip Databricks SQL refresh steps")
@@ -103,6 +141,59 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--silver-only", action="store_true", help="Run only Silver SQL refresh")
     parser.add_argument("--gold-only", action="store_true", help="Run only Gold SQL refresh")
     return parser.parse_args()
+
+
+def _print_dry_run_plan(args: argparse.Namespace, steps: list[Step]) -> None:
+    print("[DRY RUN] Pipeline execution plan")
+    selected_modes: list[str] = []
+    if args.bronze_only:
+        selected_modes.append("bronze-only")
+    if args.silver_only:
+        selected_modes.append("silver-only")
+    if args.gold_only:
+        selected_modes.append("gold-only")
+    if args.skip_export:
+        selected_modes.append("skip-export")
+    if args.skip_upload:
+        selected_modes.append("skip-upload")
+    if args.skip_sql:
+        selected_modes.append("skip-sql")
+
+    if selected_modes:
+        print(f"- Options: {', '.join(selected_modes)}")
+    else:
+        print("- Options: default")
+
+    for index, step in enumerate(steps, start=1):
+        print(f"- Step {index}: {step.name}")
+        if step.sql_files:
+            for sql_file in step.sql_files:
+                print(f"  - {sql_file.relative_to(PROJECT_ROOT)}")
+
+    skipped_labels: list[str] = []
+    if args.skip_export:
+        skipped_labels.append("Export raw to bronze batch")
+    if args.skip_upload:
+        skipped_labels.append("Upload bronze batch files")
+    if args.skip_sql:
+        skipped_labels.extend(["Run Bronze SQL", "Run Silver SQL", "Run Gold SQL"])
+    if args.bronze_only:
+        skipped_labels.extend(["Export raw to bronze batch", "Upload bronze batch files", "Run Silver SQL", "Run Gold SQL"])
+    if args.silver_only:
+        skipped_labels.extend(["Export raw to bronze batch", "Upload bronze batch files", "Run Bronze SQL", "Run Gold SQL"])
+    if args.gold_only:
+        skipped_labels.extend(["Export raw to bronze batch", "Upload bronze batch files", "Run Bronze SQL", "Run Silver SQL"])
+
+    if skipped_labels:
+        seen: set[str] = set()
+        print("- Skipped:")
+        for label in skipped_labels:
+            if label in seen:
+                continue
+            seen.add(label)
+            print(f"  - {label}")
+
+    print("No commands were executed.")
 
 
 def main() -> int:
@@ -116,6 +207,10 @@ def main() -> int:
     steps = _build_steps(args)
     if not steps:
         print("No steps selected. Nothing to run.")
+        return 0
+
+    if args.dry_run:
+        _print_dry_run_plan(args, steps)
         return 0
 
     total_steps = len(steps)
