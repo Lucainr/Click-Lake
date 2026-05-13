@@ -131,29 +131,6 @@ const App = () => {
   useEffect(() => {
     let cancelled = false
 
-    const loadSdkKeyOptions = async () => {
-      try {
-        const healthRows = await fetchJson<HealthRow[]>("/api/gold/health", "health")
-        if (cancelled) return
-
-        const keys = [...new Set(healthRows.map((row) => row.sdk_key))].sort()
-        setSdkKeyOptions(keys)
-      } catch {
-        if (cancelled) return
-        setSdkKeyOptions([])
-      }
-    }
-
-    void loadSdkKeyOptions()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-
     const load = async () => {
       setLoading(true)
       setSectionErrors({})
@@ -190,6 +167,11 @@ const App = () => {
                 return b.promotion_view_sessions - a.promotion_view_sessions
               })
             : []
+      }
+
+      if (selectedSdkKey === "all" && healthResult.status === "fulfilled") {
+        const keys = [...new Set(healthResult.value.map((row) => row.sdk_key))].sort()
+        setSdkKeyOptions(keys)
       }
 
       const nextErrors: Partial<Record<SectionKey, SectionError>> = {}

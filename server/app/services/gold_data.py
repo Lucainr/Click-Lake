@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -58,6 +59,9 @@ FUNNEL_COLUMNS = [
     "click_to_add_to_cart_rate",
 ]
 
+CacheKey = tuple[str, str | None]
+_CACHE: dict[CacheKey, tuple[float, list[dict[str, Any]]]] = {}
+
 
 def _normalized_host() -> str:
     host = (settings.databricks_host or "").strip()
@@ -109,10 +113,18 @@ def _build_query(table_name: str, columns: list[str], sdk_key: str | None) -> tu
         parameters.append(sdk_key.strip())
 
     query += " ORDER BY event_date DESC"
+    query += f" LIMIT {max(1, settings.gold_query_limit)}"
     return query, parameters
 
 
 def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> list[dict[str, Any]]:
+    cache_key: CacheKey = (table_name, sdk_key.strip() if sdk_key else None)
+    now = time.time()
+    ttl = max(0, settings.gold_api_cache_ttl_seconds)
+    cached = _CACHE.get(cache_key)
+    if cached and now - cached[0] < ttl:
+        return cached[1]
+
     host, token, http_path = _databricks_credentials()
     query, params = _build_query(table_name, columns, sdk_key)
 
@@ -158,6 +170,7 @@ def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> lis
                 if idx < len(column_names)
             }
             result.append(mapped)
+        _CACHE[cache_key] = (now, result)
         return result
     except Exception as exc:
         raise ResultParseError(str(exc)) from exc
