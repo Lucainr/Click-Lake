@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
+from fastapi.responses import JSONResponse
 
+from ..errors import ApiError, UnknownApiError
 from ..schemas import (
+    ErrorResponse,
     GoldCampaignFunnelRow,
     GoldHealthRow,
     GoldPromotionPerformanceRow,
@@ -14,31 +17,48 @@ from ..services.gold_data import (
 router = APIRouter(prefix="/api/gold", tags=["gold"])
 
 
+def _error_response(exc: ApiError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(
+            error_code=exc.error_code,
+            message=exc.message,
+            details=exc.details,
+        ).dict(),
+    )
+
+
 @router.get("/health", response_model=list[GoldHealthRow])
 async def get_gold_health(
     sdk_key: str | None = Query(default=None, description="Optional sdk_key filter"),
-) -> list[GoldHealthRow]:
+) -> list[GoldHealthRow] | JSONResponse:
     try:
         return get_health_rows(sdk_key=sdk_key)
-    except (ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ApiError as exc:
+        return _error_response(exc)
+    except Exception as exc:
+        return _error_response(UnknownApiError(str(exc)))
 
 
 @router.get("/promotion-performance", response_model=list[GoldPromotionPerformanceRow])
 async def get_gold_promotion_performance(
     sdk_key: str | None = Query(default=None, description="Optional sdk_key filter"),
-) -> list[GoldPromotionPerformanceRow]:
+) -> list[GoldPromotionPerformanceRow] | JSONResponse:
     try:
         return get_promotion_performance_rows(sdk_key=sdk_key)
-    except (ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ApiError as exc:
+        return _error_response(exc)
+    except Exception as exc:
+        return _error_response(UnknownApiError(str(exc)))
 
 
 @router.get("/campaign-funnel", response_model=list[GoldCampaignFunnelRow])
 async def get_gold_campaign_funnel(
     sdk_key: str | None = Query(default=None, description="Optional sdk_key filter"),
-) -> list[GoldCampaignFunnelRow]:
+) -> list[GoldCampaignFunnelRow] | JSONResponse:
     try:
         return get_campaign_funnel_rows(sdk_key=sdk_key)
-    except (ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ApiError as exc:
+        return _error_response(exc)
+    except Exception as exc:
+        return _error_response(UnknownApiError(str(exc)))

@@ -4,6 +4,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ..config import settings
+from ..errors import (
+    ConfigMissingError,
+    DatabricksConnectError,
+    DatabricksQueryError,
+    ResultParseError,
+)
 
 HEALTH_TABLE = "workspace.clicklake_gold.gold_workspace_health_daily_json"
 PROMOTION_TABLE = "workspace.clicklake_gold.gold_promotion_performance_daily_json"
@@ -56,11 +62,11 @@ FUNNEL_COLUMNS = [
 def _normalized_host() -> str:
     host = (settings.databricks_host or "").strip()
     if not host:
-        raise ValueError("Missing DATABRICKS_HOST")
+        raise ConfigMissingError("Missing DATABRICKS_HOST")
     if host.startswith("http://") or host.startswith("https://"):
         parsed = urlparse(host)
         if not parsed.hostname:
-            raise ValueError("Invalid DATABRICKS_HOST")
+            raise ConfigMissingError("Invalid DATABRICKS_HOST")
         return parsed.hostname
     return host
 
@@ -77,7 +83,9 @@ def _databricks_credentials() -> tuple[str, str, str]:
         missing.append("DATABRICKS_HTTP_PATH")
 
     if missing:
-        raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+        raise ConfigMissingError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
     return host, token, http_path
 
 
@@ -111,7 +119,7 @@ def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> lis
     try:
         from databricks import sql
     except ImportError as exc:
-        raise RuntimeError(
+        raise ConfigMissingError(
             "databricks-sql-connector is not installed. Run: pip install -r requirements.txt"
         ) from exc
 
@@ -129,17 +137,30 @@ def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> lis
                 rows = cursor.fetchall()
                 column_names = [col[0] for col in (cursor.description or [])]
     except Exception as exc:
-        raise RuntimeError(f"Databricks query failed for {table_name}: {exc}") from exc
+        message = str(exc).lower()
+        if "warehouse" in message and (
+            "stopped" in message
+            or "not running" in message
+            or "unavailable" in message
+            or "start" in message
+        ):
+            raise DatabricksConnectError(str(exc), warehouse_unavailable=True) from exc
+        if "connect" in message or "dns" in message or "timeout" in message:
+            raise DatabricksConnectError(str(exc)) from exc
+        raise DatabricksQueryError(str(exc)) from exc
 
-    result: list[dict[str, Any]] = []
-    for row in rows:
-        mapped = {
-            column_names[idx]: _serialize_value(value)
-            for idx, value in enumerate(row)
-            if idx < len(column_names)
-        }
-        result.append(mapped)
-    return result
+    try:
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            mapped = {
+                column_names[idx]: _serialize_value(value)
+                for idx, value in enumerate(row)
+                if idx < len(column_names)
+            }
+            result.append(mapped)
+        return result
+    except Exception as exc:
+        raise ResultParseError(str(exc)) from exc
 
 
 def get_health_rows(sdk_key: str | None = None) -> list[dict[str, Any]]:
