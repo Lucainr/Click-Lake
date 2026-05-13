@@ -55,6 +55,23 @@ MAX_EVENTS_PER_FILE=500 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `GET /api/gold/health[?sdk_key=...]`
 - `GET /api/gold/promotion-performance[?sdk_key=...]`
 - `GET /api/gold/campaign-funnel[?sdk_key=...]`
+
+Gold API 오류 응답 형식:
+```json
+{
+  "error_code": "DATABRICKS_QUERY_FAILED",
+  "message": "Failed to query Databricks Gold table",
+  "details": "..."
+}
+```
+
+주요 `error_code`:
+- `CONFIG_MISSING`
+- `DATABRICKS_CONNECT_FAILED`
+- `WAREHOUSE_UNAVAILABLE`
+- `DATABRICKS_QUERY_FAILED`
+- `RESULT_PARSE_FAILED`
+- `UNKNOWN_ERROR`
 - `POST /collect`
   - 요청 예시
     ```json

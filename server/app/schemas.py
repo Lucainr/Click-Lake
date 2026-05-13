@@ -29,6 +29,12 @@ class HealthResponse(BaseModel):
     status: str = "ok"
 
 
+class ErrorResponse(BaseModel):
+    error_code: str
+    message: str
+    details: Optional[str] = None
+
+
 class GoldHealthRow(BaseModel):
     event_date: str
     sdk_key: str
