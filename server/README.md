@@ -45,6 +45,19 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+## Docker 실행
+단독 빌드/실행:
+```bash
+cd server
+docker build -t clicklake-server .
+docker run --rm -p 8000:8000 --env-file .env clicklake-server
+```
+
+권장: 루트에서 compose 실행
+```bash
+docker compose up --build
+```
+
 롤링 크기 변경(예: 500)
 ```bash
 MAX_EVENTS_PER_FILE=500 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

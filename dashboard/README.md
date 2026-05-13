@@ -30,6 +30,15 @@ npm run dev
 
 브라우저에서 `http://localhost:5173` 접속.
 
+## Docker Compose 실행
+루트에서 실행:
+```bash
+docker compose up --build
+```
+
+compose 환경에서는 dashboard가 `VITE_API_BASE_URL=http://localhost:8000`를 사용해
+host 노출된 FastAPI 포트로 조회합니다.
+
 ## 화면 구성
 1. Health 요약
    - summary cards: raw / valid / invalid / invalid ratio
