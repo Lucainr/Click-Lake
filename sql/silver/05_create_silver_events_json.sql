@@ -101,7 +101,7 @@ WITH parsed AS (
     to_timestamp(loaded_at) AS loaded_at
   FROM workspace.clicklake_bronze.events_raw_json
 ),
-validated AS (
+classified AS (
   SELECT
     *,
     CASE
@@ -128,6 +128,24 @@ validated AS (
       ELSE NULL
     END AS error_code
   FROM parsed
+),
+valid_candidates AS (
+  SELECT *
+  FROM classified
+  WHERE error_code IS NULL
+    AND coalesce(event_id, '') <> ''
+),
+ranked_valid AS (
+  SELECT
+    *,
+    ROW_NUMBER() OVER (
+      PARTITION BY event_id
+      ORDER BY
+        loaded_at DESC,
+        event_time DESC,
+        source_file DESC
+    ) AS row_num
+  FROM valid_candidates
 )
 SELECT
   received_at,
@@ -175,5 +193,5 @@ SELECT
   source_file,
   loaded_at,
   current_timestamp() AS validated_at
-FROM validated
-WHERE error_code IS NULL;
+FROM ranked_valid
+WHERE row_num = 1;
