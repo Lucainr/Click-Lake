@@ -1,4 +1,4 @@
--- JSON Bronze -> Silver Invalid Events
+-- JSON Bronze -> Silver Invalid Events (event_id dedup + idempotency)
 -- Source: workspace.clicklake_bronze.events_raw_json
 
 CREATE SCHEMA IF NOT EXISTS workspace.clicklake_silver;
@@ -29,6 +29,7 @@ WITH parsed AS (
     trim(coalesce(event_id, get_json_object(raw_event_json, '$.event_id'))) AS event_id,
     lower(trim(coalesce(event_type, get_json_object(raw_event_json, '$.event_type')))) AS event_type,
     trim(coalesce(event_time, get_json_object(raw_event_json, '$.event_time'))) AS event_time,
+    to_timestamp(trim(coalesce(event_time, get_json_object(raw_event_json, '$.event_time')))) AS event_time_ts,
     trim(coalesce(session_id, get_json_object(raw_event_json, '$.session_id'))) AS session_id,
     trim(coalesce(page_url, get_json_object(raw_event_json, '$.page_url'))) AS page_url,
     trim(get_json_object(raw_event_json, '$.promotion_id')) AS promotion_id,
@@ -41,7 +42,7 @@ WITH parsed AS (
     to_timestamp(loaded_at) AS loaded_at
   FROM workspace.clicklake_bronze.events_raw_json
 ),
-validated AS (
+classified AS (
   SELECT
     *,
     CASE
@@ -51,7 +52,7 @@ validated AS (
       WHEN event_type NOT IN ('page_view', 'promotion_view', 'promotion_click', 'product_view', 'add_to_cart')
         THEN 'INVALID_EVENT_TYPE'
       WHEN coalesce(event_time, '') = '' THEN 'MISSING_EVENT_TIME'
-      WHEN to_timestamp(event_time) IS NULL THEN 'INVALID_EVENT_TIME_FORMAT'
+      WHEN event_time_ts IS NULL THEN 'INVALID_EVENT_TIME_FORMAT'
       WHEN coalesce(session_id, '') = '' THEN 'MISSING_SESSION_ID'
       WHEN coalesce(page_url, '') = '' THEN 'MISSING_PAGE_URL'
       WHEN event_type IN ('promotion_view', 'promotion_click')
@@ -68,6 +69,59 @@ validated AS (
       ELSE NULL
     END AS error_code
   FROM parsed
+),
+ranked_by_event_id AS (
+  SELECT
+    *,
+    ROW_NUMBER() OVER (
+      PARTITION BY event_id
+      ORDER BY
+        CASE WHEN error_code IS NULL THEN 0 ELSE 1 END ASC,
+        loaded_at DESC,
+        event_time_ts DESC,
+        source_file DESC
+    ) AS row_num
+  FROM classified
+  WHERE coalesce(event_id, '') <> ''
+),
+dedup_invalid AS (
+  -- event_id가 있는 경우:
+  -- 1) valid/invalid 충돌 시 valid 우선 (invalid는 제외)
+  -- 2) invalid만 존재하면 최신 invalid 1건만 유지
+  SELECT
+    received_at,
+    sdk_key,
+    event_id,
+    event_type,
+    event_time,
+    session_id,
+    page_url,
+    raw_event_json,
+    error_code,
+    source_file,
+    loaded_at
+  FROM ranked_by_event_id
+  WHERE row_num = 1
+    AND error_code IS NOT NULL
+
+  UNION ALL
+
+  -- event_id가 비어있는 invalid는 id 기반 dedup 불가 -> 원본 유지
+  SELECT
+    received_at,
+    sdk_key,
+    event_id,
+    event_type,
+    event_time,
+    session_id,
+    page_url,
+    raw_event_json,
+    error_code,
+    source_file,
+    loaded_at
+  FROM classified
+  WHERE coalesce(event_id, '') = ''
+    AND error_code IS NOT NULL
 )
 SELECT
   received_at,
@@ -106,5 +160,4 @@ SELECT
   source_file,
   loaded_at,
   current_timestamp() AS detected_at
-FROM validated
-WHERE error_code IS NOT NULL;
+FROM dedup_invalid;
