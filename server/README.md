@@ -226,3 +226,39 @@ LIST '/Volumes/workspace/clicklake_bronze/raw_files';
 SELECT COUNT(*) AS row_count
 FROM workspace.clicklake_bronze.events_raw_json;
 ```
+
+## 전체 파이프라인 Orchestrator
+수동 단계를 한 번에 실행:
+1. raw JSONL -> Bronze batch export
+2. Bronze batch -> Databricks Volume upload
+3. Bronze SQL refresh
+4. Silver SQL refresh
+5. Gold SQL refresh
+
+실행:
+```bash
+cd server
+source .venv/bin/activate
+python scripts/run_pipeline.py
+```
+
+옵션:
+```bash
+python scripts/run_pipeline.py --skip-export
+python scripts/run_pipeline.py --skip-upload
+python scripts/run_pipeline.py --skip-sql
+python scripts/run_pipeline.py --bronze-only
+python scripts/run_pipeline.py --silver-only
+python scripts/run_pipeline.py --gold-only
+```
+
+필수 환경변수:
+- `DATABRICKS_HOST`
+- `DATABRICKS_TOKEN`
+- `DATABRICKS_HTTP_PATH`
+- `DATABRICKS_VOLUME_PATH` (upload 단계에서 필요)
+
+실패 시 확인 포인트:
+- export 실패: raw JSONL 경로/체크포인트 파일 권한 확인
+- upload 실패: `DATABRICKS_VOLUME_PATH`/토큰 권한 확인
+- SQL 실패: SQL Warehouse 상태(실행 중 여부), Gold/Bronze 테이블 권한, SQL 파일 경로 확인
