@@ -3,7 +3,7 @@
 
 CREATE SCHEMA IF NOT EXISTS workspace.clicklake_silver;
 
-CREATE TABLE IF NOT EXISTS workspace.clicklake_silver.silver_events_json (
+CREATE OR REPLACE TABLE workspace.clicklake_silver.silver_events_json (
   received_at TIMESTAMP,
   event_date DATE,
   sdk_key STRING,
@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS workspace.clicklake_silver.silver_events_json (
   source_campaign_id STRING,
   raw_event_json STRING,
   export_batch_id STRING,
+  ingestion_source STRING,
   source_file STRING,
   loaded_at TIMESTAMP,
   validated_at TIMESTAMP
@@ -97,6 +98,7 @@ WITH parsed AS (
     trim(get_json_object(raw_event_json, '$.source_campaign_id')) AS source_campaign_id,
     raw_event_json,
     export_batch_id,
+    trim(coalesce(ingestion_source, 'unknown')) AS ingestion_source,
     source_file,
     to_timestamp(loaded_at) AS loaded_at
   FROM workspace.clicklake_bronze.events_raw_json
@@ -190,6 +192,7 @@ SELECT
   source_campaign_id,
   raw_event_json,
   export_batch_id,
+  ingestion_source,
   source_file,
   loaded_at,
   current_timestamp() AS validated_at

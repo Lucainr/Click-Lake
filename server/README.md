@@ -235,7 +235,9 @@ find out/bronze_batches -type f | sort
 
 Databricks Bronze SQL
 - `../sql/bronze/03_create_events_raw_json.sql`
-- `COPY INTO`의 `SOURCE_PATH`는 Databricks에서 접근 가능한 경로로 교체 필요
+- 기본값으로 direct + kafka 경로를 함께 ingest:
+  - `/Volumes/workspace/clicklake_bronze/raw_batches/direct/*.jsonl`
+  - `/Volumes/workspace/clicklake_bronze/raw_batches/kafka/date=*/bronze_events-*.jsonl`
 
 ## Bronze Batch -> Databricks Volume Upload
 - 입력 source(동시 지원):

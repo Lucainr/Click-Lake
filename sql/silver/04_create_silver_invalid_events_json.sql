@@ -3,7 +3,7 @@
 
 CREATE SCHEMA IF NOT EXISTS workspace.clicklake_silver;
 
-CREATE TABLE IF NOT EXISTS workspace.clicklake_silver.silver_invalid_events_json (
+CREATE OR REPLACE TABLE workspace.clicklake_silver.silver_invalid_events_json (
   received_at TIMESTAMP,
   sdk_key STRING,
   event_id STRING,
@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS workspace.clicklake_silver.silver_invalid_events_json
   error_code STRING,
   error_message STRING,
   validation_stage STRING,
+  ingestion_source STRING,
   source_file STRING,
   loaded_at TIMESTAMP,
   detected_at TIMESTAMP
@@ -38,6 +39,7 @@ WITH parsed AS (
     trim(get_json_object(raw_event_json, '$.placement')) AS placement,
     trim(get_json_object(raw_event_json, '$.product_id')) AS product_id,
     raw_event_json,
+    trim(coalesce(ingestion_source, 'unknown')) AS ingestion_source,
     source_file,
     to_timestamp(loaded_at) AS loaded_at
   FROM workspace.clicklake_bronze.events_raw_json
@@ -98,6 +100,7 @@ dedup_invalid AS (
     page_url,
     raw_event_json,
     error_code,
+    ingestion_source,
     source_file,
     loaded_at
   FROM ranked_by_event_id
@@ -117,6 +120,7 @@ dedup_invalid AS (
     page_url,
     raw_event_json,
     error_code,
+    ingestion_source,
     source_file,
     loaded_at
   FROM classified
@@ -157,6 +161,7 @@ SELECT
       THEN 'EVENT_SPECIFIC'
     ELSE 'UNKNOWN'
   END AS validation_stage,
+  ingestion_source,
   source_file,
   loaded_at,
   current_timestamp() AS detected_at
