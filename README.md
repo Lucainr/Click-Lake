@@ -16,4 +16,4 @@ docker compose up --build
 - `server` 컨테이너: FastAPI (`uvicorn app.main:app`)
 - `dashboard` 컨테이너: Vite dev server
 - `kafka` 컨테이너: ingest 이벤트 publish 대상 broker
-- `consumer` 컨테이너: Kafka 메시지를 날짜별 JSONL sink로 저장
+- `consumer` 컨테이너: Kafka 메시지를 raw sink + Bronze direct JSONL sink로 저장

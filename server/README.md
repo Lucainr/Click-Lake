@@ -159,11 +159,22 @@ KAFKA_CLIENT_ID=clicklake-server
 KAFKA_PUBLISH_TIMEOUT_SECONDS=3
 ```
 
-## Kafka Consumer (Stage 1)
+## Kafka Consumer (Stage 2)
 - compose 서비스명: `consumer`
 - source topic: `clicklake.events.raw`
-- sink 경로(호스트): `server/data/raw_events_kafka/date=YYYY-MM-DD/events-0001.jsonl`
-- 저장 단위: event 1건당 JSONL 1줄
+- raw sink 경로(호스트): `server/data/raw_events_kafka/date=YYYY-MM-DD/events-0001.jsonl`
+- Bronze direct sink 경로(호스트): `server/data/bronze_batches_kafka/date=YYYY-MM-DD/bronze_events-0001.jsonl`
+- 저장 단위: 두 sink 모두 event 1건당 JSONL 1줄
+
+consumer sink 제어 환경변수:
+```env
+KAFKA_ENABLE_RAW_SINK=true
+KAFKA_SINK_DIR=/data/raw_events_kafka
+SINK_MAX_EVENTS_PER_FILE=1000
+KAFKA_ENABLE_BRONZE_DIRECT=true
+KAFKA_BRONZE_SINK_DIR=/data/bronze_batches_kafka
+KAFKA_BRONZE_MAX_EVENTS_PER_FILE=1000
+```
 
 로그 확인:
 ```bash
@@ -172,7 +183,7 @@ docker compose logs -f consumer
 
 Kafka 메시지 확인(선택):
 ```bash
-docker compose exec kafka /opt/bitnami/kafka/bin/kafka-console-consumer.sh \
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server kafka:9092 \
   --topic clicklake.events.raw \
   --from-beginning \
@@ -186,13 +197,17 @@ cp .env.example .env
 ```
 
 ## Raw -> Bronze Export (파일 단위)
-- 처리 단위: line offset이 아니라 `date=.../events-....jsonl` 파일 단위
+- 입력 소스(동시 지원):
+  - `data/raw_events/date=.../events-....jsonl`
+  - `data/raw_events_kafka/date=.../events-....jsonl`
+- 처리 단위: line offset이 아니라 **파일 단위**
 - 체크포인트: `data/checkpoints/bronze_export_state.json`
 - 체크포인트 구조
   ```json
   {
     "processed_files": [
-      "date=2026-04-15/events-0001.jsonl"
+      "raw_events/date=2026-04-15/events-0001.jsonl",
+      "raw_events_kafka/date=2026-04-15/events-0001.jsonl"
     ]
   }
   ```
@@ -208,6 +223,9 @@ python scripts/export_raw_to_bronze.py
 - 신규 파일만 export
 - 출력: `out/bronze_batches/bronze_events_<timestamp>.jsonl`
 - 같은 파일은 다음 실행에서 재처리되지 않음
+- Bronze 레코드에 `ingestion_source` 포함:
+  - `direct_raw` (raw_events)
+  - `kafka_consumer` (raw_events_kafka)
 
 확인
 ```bash
@@ -220,20 +238,25 @@ Databricks Bronze SQL
 - `COPY INTO`의 `SOURCE_PATH`는 Databricks에서 접근 가능한 경로로 교체 필요
 
 ## Bronze Batch -> Databricks Volume Upload
-- 입력: `out/bronze_batches/*.jsonl`
-- 출력 대상: `DATABRICKS_VOLUME_PATH`
-  - 예1: `/Volumes/workspace/clicklake_bronze/raw_files`
-  - 예2: `/Volumes/workspace/clicklake_bronze/raw_batches`
+- 입력 source(동시 지원):
+  - direct: `out/bronze_batches/*.jsonl`
+  - kafka direct: `data/bronze_batches_kafka/**/*.jsonl`
+- Databricks 출력 대상(권장 분리):
+  - direct: `DATABRICKS_VOLUME_PATH_DIRECT`
+    - 예: `/Volumes/workspace/clicklake_bronze/raw_batches/direct`
+  - kafka: `DATABRICKS_VOLUME_PATH_KAFKA`
+    - 예: `/Volumes/workspace/clicklake_bronze/raw_batches/kafka`
 - 체크포인트: `data/checkpoints/bronze_upload_state.json`
 - 체크포인트 구조
   ```json
   {
     "uploaded_files": [
-      "bronze_events_20260415T101500Z.jsonl"
+      "out/bronze_batches/bronze_events_20260415T101500Z.jsonl",
+      "data/bronze_batches_kafka/date=2026-05-14/bronze_events-0001.jsonl"
     ]
   }
   ```
-- 처리 순서: 파일명 오름차순
+- 처리 순서: source/direct->kafka + 파일명 오름차순
 - 성공한 파일만 checkpoint에 반영 (중복 업로드 방지)
 
 환경변수 설정
@@ -252,7 +275,8 @@ python scripts/upload_bronze_batches_to_databricks.py
 ```
 
 성공/재실행 예시
-- `Uploaded bronze_events_20260415T101500Z.jsonl`
+- `Uploaded source=direct file=bronze_events_20260415T101500Z.jsonl remote=/Volumes/.../direct/bronze_events_20260415T101500Z.jsonl`
+- `Uploaded source=kafka file=date=2026-05-14/bronze_events-0001.jsonl remote=/Volumes/.../kafka/date=2026-05-14/bronze_events-0001.jsonl`
 - `No new batch files to upload.`
 
 Databricks 업로드 확인
@@ -262,13 +286,13 @@ CREATE VOLUME IF NOT EXISTS workspace.clicklake_bronze.raw_batches;
 ```
 1) SQL Editor에서 Volume 파일 목록 확인
 ```sql
-LIST '/Volumes/workspace/clicklake_bronze/raw_files';
-LIST '/Volumes/workspace/clicklake_bronze/raw_batches';
+LIST '/Volumes/workspace/clicklake_bronze/raw_batches/direct';
+LIST '/Volumes/workspace/clicklake_bronze/raw_batches/kafka';
 ```
 2) 파일 데이터 확인 (선택)
 ```sql
-SELECT * FROM json.`/Volumes/workspace/clicklake_bronze/raw_files/*.jsonl` LIMIT 10;
-SELECT * FROM json.`/Volumes/workspace/clicklake_bronze/raw_batches/*.jsonl` LIMIT 10;
+SELECT * FROM json.`/Volumes/workspace/clicklake_bronze/raw_batches/direct/*.jsonl` LIMIT 10;
+SELECT * FROM json.`/Volumes/workspace/clicklake_bronze/raw_batches/kafka/date=*/bronze_events-*.jsonl` LIMIT 10;
 ```
 
 ## End-to-End 검증 순서 (로컬 -> Databricks Bronze)
@@ -284,7 +308,8 @@ python scripts/upload_bronze_batches_to_databricks.py
 ```
 3) Databricks에서 업로드 파일 확인
 ```sql
-LIST '/Volumes/workspace/clicklake_bronze/raw_files';
+LIST '/Volumes/workspace/clicklake_bronze/raw_batches/direct';
+LIST '/Volumes/workspace/clicklake_bronze/raw_batches/kafka';
 ```
 4) Bronze 테이블 생성 + 적재
 ```sql
@@ -334,9 +359,11 @@ python scripts/run_pipeline.py --dry-run --gold-only
 - `DATABRICKS_HOST`
 - `DATABRICKS_TOKEN`
 - `DATABRICKS_HTTP_PATH`
-- `DATABRICKS_VOLUME_PATH` (upload 단계에서 필요)
+- `DATABRICKS_VOLUME_PATH_DIRECT` (upload direct source)
+- `DATABRICKS_VOLUME_PATH_KAFKA` (upload kafka source)
+  - (호환) `DATABRICKS_VOLUME_PATH`만 있으면 자동으로 `/direct`, `/kafka` suffix 사용
 
 실패 시 확인 포인트:
 - export 실패: raw JSONL 경로/체크포인트 파일 권한 확인
-- upload 실패: `DATABRICKS_VOLUME_PATH`/토큰 권한 확인
+- upload 실패: `DATABRICKS_VOLUME_PATH_DIRECT`/`DATABRICKS_VOLUME_PATH_KAFKA`/토큰 권한 확인
 - SQL 실패: SQL Warehouse 상태(실행 중 여부), Gold/Bronze 테이블 권한, SQL 파일 경로 확인
