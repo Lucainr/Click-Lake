@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     gold_query_limit: int = 500
     gold_api_cache_ttl_seconds: int = 20
     gold_warmup_on_startup: bool = True
+    kafka_enabled: bool = True
+    kafka_bootstrap_servers: str | None = None
+    kafka_topic_raw_events: str = "clicklake.events.raw"
+    kafka_client_id: str = "clicklake-server"
+    kafka_publish_timeout_seconds: float = 3.0
 
     @property
     def raw_events_base_abs_dir(self) -> Path:

@@ -15,6 +15,7 @@ server/
       gold.py     # Gold read-only API endpoint
     services/
       gold_data.py # Gold 조회 데이터 로딩 서비스(Databricks SQL)
+      kafka_producer.py # /collect 이벤트 Kafka publish 서비스
   scripts/
     export_raw_to_bronze.py
     upload_bronze_batches_to_databricks.py
@@ -57,6 +58,10 @@ docker run --rm -p 8000:8000 --env-file .env clicklake-server
 ```bash
 docker compose up --build
 ```
+
+Kafka 포함 compose 확인:
+- broker 내부 주소: `kafka:9092` (server 컨테이너에서 사용)
+- 호스트 테스트 주소: `localhost:29092`
 
 롤링 크기 변경(예: 500)
 ```bash
@@ -108,6 +113,17 @@ Gold API 오류 응답 형식:
   - 파일 롤링
     - 기본 `max_events_per_file=1000`
     - 파일이 1000줄에 도달하면 `events-0002.jsonl` 같은 다음 파일로 저장
+  - Kafka publish 병행
+    - topic: `clicklake.events.raw`
+    - 메시지 구조:
+      ```json
+      {
+        "received_at": "2026-04-22T12:00:00Z",
+        "sdk_key": "clk_live_demo",
+        "events": [ ... ]
+      }
+      ```
+    - 정책: raw 저장 성공 시 API는 성공 응답을 유지하고, Kafka publish 실패는 warning 로그만 남깁니다.
 
 ### Gold read-only API 데이터 소스
 - 현재 단계에서는 Databricks SQL Warehouse를 직접 조회합니다.
@@ -129,6 +145,15 @@ DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/<warehouse-id>
 GOLD_QUERY_LIMIT=500
 GOLD_API_CACHE_TTL_SECONDS=20
 GOLD_WARMUP_ON_STARTUP=true
+```
+
+Kafka 관련 옵션:
+```env
+KAFKA_ENABLED=true
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+KAFKA_TOPIC_RAW_EVENTS=clicklake.events.raw
+KAFKA_CLIENT_ID=clicklake-server
+KAFKA_PUBLISH_TIMEOUT_SECONDS=3
 ```
 
 설정 예시:
