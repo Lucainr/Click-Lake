@@ -58,7 +58,7 @@ def _create_producer() -> Any | None:
             value_serializer=lambda value: json.dumps(
                 value, ensure_ascii=False, separators=(",", ":")
             ).encode("utf-8"),
-            acks="1",
+            acks=1,
             retries=1,
             linger_ms=20,
             request_timeout_ms=max(1000, int(settings.kafka_publish_timeout_seconds * 1000)),

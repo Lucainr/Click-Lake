@@ -31,6 +31,9 @@ server/
       bronze_events_YYYYMMDDTHHMMSSZ.jsonl
   .env.example
   requirements.txt
+../consumer/
+  main.py
+  Dockerfile
 ```
 
 ## 설치
@@ -154,6 +157,26 @@ KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 KAFKA_TOPIC_RAW_EVENTS=clicklake.events.raw
 KAFKA_CLIENT_ID=clicklake-server
 KAFKA_PUBLISH_TIMEOUT_SECONDS=3
+```
+
+## Kafka Consumer (Stage 1)
+- compose 서비스명: `consumer`
+- source topic: `clicklake.events.raw`
+- sink 경로(호스트): `server/data/raw_events_kafka/date=YYYY-MM-DD/events-0001.jsonl`
+- 저장 단위: event 1건당 JSONL 1줄
+
+로그 확인:
+```bash
+docker compose logs -f consumer
+```
+
+Kafka 메시지 확인(선택):
+```bash
+docker compose exec kafka /opt/bitnami/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server kafka:9092 \
+  --topic clicklake.events.raw \
+  --from-beginning \
+  --max-messages 5
 ```
 
 설정 예시:
