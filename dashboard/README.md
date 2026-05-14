@@ -11,9 +11,7 @@ Gold 집계 결과를 시연하기 위한 로컬 조회 화면입니다.
 
 ## 데이터 소스
 FastAPI read-only API 사용:
-- `GET /api/gold/health`
-- `GET /api/gold/promotion-performance`
-- `GET /api/gold/campaign-funnel`
+- `GET /api/gold/dashboard` (health/promotion/funnel 통합 응답)
 
 기본값은 same-origin(`""`)이며, 로컬 개발에서 프론트/백엔드 포트가 다르면
 `VITE_API_BASE_URL`을 설정합니다.

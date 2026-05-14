@@ -134,80 +134,64 @@ const App = () => {
     const load = async () => {
       setLoading(true)
       setSectionErrors({})
+      try {
+        const dashboard = await fetchJson<DashboardData>(
+          withSdkKeyQuery("/api/gold/dashboard", selectedSdkKey),
+          "health"
+        )
+        if (cancelled) return
 
-      const [healthResult, promotionResult, funnelResult] = await Promise.allSettled([
-        fetchJson<HealthRow[]>(withSdkKeyQuery("/api/gold/health", selectedSdkKey), "health"),
-        fetchJson<PromotionPerformanceRow[]>(
-          withSdkKeyQuery("/api/gold/promotion-performance", selectedSdkKey),
-          "promotion"
-        ),
-        fetchJson<CampaignFunnelRow[]>(withSdkKeyQuery("/api/gold/campaign-funnel", selectedSdkKey), "funnel")
-      ])
+        const nextData: DashboardData = {
+          health: sortByDateDesc(dashboard.health),
+          promotion: [...dashboard.promotion].sort((a, b) => {
+            const byDate = b.event_date.localeCompare(a.event_date)
+            if (byDate !== 0) return byDate
+            return b.ctr - a.ctr
+          }),
+          funnel: [...dashboard.funnel].sort((a, b) => {
+            const byDate = b.event_date.localeCompare(a.event_date)
+            if (byDate !== 0) return byDate
+            return b.promotion_view_sessions - a.promotion_view_sessions
+          })
+        }
 
-      if (cancelled) return
+        if (selectedSdkKey === "all") {
+          const keys = [...new Set(dashboard.health.map((row) => row.sdk_key))].sort()
+          setSdkKeyOptions(keys)
+        }
 
-      const nextData: DashboardData = {
-        health:
-          healthResult.status === "fulfilled"
-            ? sortByDateDesc(healthResult.value)
-            : [],
-        promotion:
-          promotionResult.status === "fulfilled"
-            ? [...promotionResult.value].sort((a, b) => {
-                const byDate = b.event_date.localeCompare(a.event_date)
-                if (byDate !== 0) return byDate
-                return b.ctr - a.ctr
-              })
-            : [],
-        funnel:
-          funnelResult.status === "fulfilled"
-            ? [...funnelResult.value].sort((a, b) => {
-                const byDate = b.event_date.localeCompare(a.event_date)
-                if (byDate !== 0) return byDate
-                return b.promotion_view_sessions - a.promotion_view_sessions
-              })
-            : []
-      }
-
-      if (selectedSdkKey === "all" && healthResult.status === "fulfilled") {
-        const keys = [...new Set(healthResult.value.map((row) => row.sdk_key))].sort()
-        setSdkKeyOptions(keys)
-      }
-
-      const nextErrors: Partial<Record<SectionKey, SectionError>> = {}
-
-      const mapError = (section: SectionKey, reason: unknown): SectionError => {
+        setData(nextData)
+        setSectionErrors({})
+      } catch (reason) {
+        if (cancelled) return
         const errorCode =
           typeof reason === "object" && reason !== null && "errorCode" in reason
             ? String((reason as { errorCode?: string }).errorCode ?? "UNKNOWN_ERROR")
             : "UNKNOWN_ERROR"
-        const message = reason instanceof Error ? reason.message : `Failed to load ${section} data`
+        const message = reason instanceof Error ? reason.message : "Failed to load dashboard data"
         const details =
           typeof reason === "object" && reason !== null && "details" in reason
             ? String((reason as { details?: string }).details ?? "")
             : undefined
 
-        return {
+        const toSectionError = (section: SectionKey): SectionError => ({
           errorCode,
           message,
           details,
           hint: getErrorHint(errorCode, section)
+        })
+
+        setData({ health: [], promotion: [], funnel: [] })
+        setSectionErrors({
+          health: toSectionError("health"),
+          promotion: toSectionError("promotion"),
+          funnel: toSectionError("funnel")
+        })
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
         }
       }
-
-      if (healthResult.status === "rejected") {
-        nextErrors.health = mapError("health", healthResult.reason)
-      }
-      if (promotionResult.status === "rejected") {
-        nextErrors.promotion = mapError("promotion", promotionResult.reason)
-      }
-      if (funnelResult.status === "rejected") {
-        nextErrors.funnel = mapError("funnel", funnelResult.reason)
-      }
-
-      setData(nextData)
-      setSectionErrors(nextErrors)
-      setLoading(false)
     }
 
     void load()

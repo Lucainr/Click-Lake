@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     databricks_http_path: str | None = None
     gold_query_limit: int = 500
     gold_api_cache_ttl_seconds: int = 20
+    gold_warmup_on_startup: bool = True
 
     @property
     def raw_events_base_abs_dir(self) -> Path:

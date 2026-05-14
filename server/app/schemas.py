@@ -68,7 +68,7 @@ class GoldCampaignFunnelRow(BaseModel):
     event_date: str
     sdk_key: str
     campaign_id: str
-    campaign_name: str
+    campaign_name: Optional[str] = None
     promotion_view_sessions: int
     promotion_click_sessions: int
     product_view_sessions: int
@@ -76,3 +76,9 @@ class GoldCampaignFunnelRow(BaseModel):
     view_to_click_rate: float
     click_to_product_view_rate: float
     click_to_add_to_cart_rate: float
+
+
+class GoldDashboardResponse(BaseModel):
+    health: List[GoldHealthRow]
+    promotion: List[GoldPromotionPerformanceRow]
+    funnel: List[GoldCampaignFunnelRow]

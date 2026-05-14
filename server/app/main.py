@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import CollectRequest, CollectResponse, HealthResponse
 from .config import settings
+from .errors import ApiError
+from .services.gold_data import get_dashboard_rows
 from .storage import append_raw_events_partitioned
 from .routes.gold import router as gold_router
 
@@ -22,6 +24,25 @@ app.add_middleware(
 )
 
 app.include_router(gold_router)
+
+
+@app.on_event("startup")
+async def warmup_gold_cache() -> None:
+    if not settings.gold_warmup_on_startup:
+        logger.info("gold warmup skipped (gold_warmup_on_startup=false)")
+        return
+
+    try:
+        get_dashboard_rows(sdk_key=None)
+        logger.info("gold dashboard cache warmup completed")
+    except ApiError as exc:
+        logger.warning(
+            "gold dashboard warmup failed: %s (%s)",
+            exc.error_code,
+            exc.details or exc.message,
+        )
+    except Exception as exc:  # pragma: no cover - defensive log path
+        logger.warning("gold dashboard warmup failed: %s", str(exc))
 
 
 @app.get("/health", response_model=HealthResponse)
