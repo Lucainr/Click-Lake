@@ -1,10 +1,36 @@
 services:
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: clicklake-kafka
+    environment:
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    ports:
+      - "29092:29092"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    restart: unless-stopped
+
   server:
     build:
       context: ./server
     container_name: clicklake-server
+    depends_on:
+      - kafka
     env_file:
       - ./server/.env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC_RAW_EVENTS: clicklake.events.raw
+      KAFKA_ENABLED: "true"
     ports:
       - "8000:8000"
     volumes:
@@ -26,3 +52,6 @@ services:
       - ./dashboard:/app
       - /app/node_modules
     restart: unless-stopped
+
+volumes:
+  kafka_data:

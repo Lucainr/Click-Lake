@@ -7,6 +7,11 @@ from .schemas import CollectRequest, CollectResponse, HealthResponse
 from .config import settings
 from .errors import ApiError
 from .services.gold_data import get_dashboard_rows
+from .services.kafka_producer import (
+    close_kafka_producer,
+    init_kafka_producer,
+    publish_collect_payload,
+)
 from .storage import append_raw_events_partitioned
 from .routes.gold import router as gold_router
 
@@ -28,6 +33,8 @@ app.include_router(gold_router)
 
 @app.on_event("startup")
 async def warmup_gold_cache() -> None:
+    init_kafka_producer()
+
     if not settings.gold_warmup_on_startup:
         logger.info("gold warmup skipped (gold_warmup_on_startup=false)")
         return
@@ -43,6 +50,11 @@ async def warmup_gold_cache() -> None:
         )
     except Exception as exc:  # pragma: no cover - defensive log path
         logger.warning("gold dashboard warmup failed: %s", str(exc))
+
+
+@app.on_event("shutdown")
+async def shutdown_producer() -> None:
+    close_kafka_producer()
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -78,6 +90,9 @@ async def collect(payload: CollectRequest) -> CollectResponse:
     except ValueError as exc:
         logger.exception("invalid storage configuration")
         raise HTTPException(status_code=500, detail="invalid storage configuration") from exc
+
+    kafka_events = [event.dict(exclude_none=True) for event in payload.events]
+    publish_collect_payload(sdk_key=payload.sdk_key.strip(), events=kafka_events)
 
     return CollectResponse(
         success=True,
