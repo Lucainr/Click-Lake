@@ -43,5 +43,6 @@ server/.venv/
 # Raw collected events (local runtime artifact)
 server/data/raw_events/
 server/data/raw_events_kafka/
+server/data/bronze_batches_kafka/
 server/data/checkpoints/
 server/out/bronze_batches/

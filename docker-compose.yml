@@ -49,8 +49,12 @@ services:
       KAFKA_TOPIC_RAW_EVENTS: clicklake.events.raw
       KAFKA_CONSUMER_GROUP: clicklake-consumer
       KAFKA_AUTO_OFFSET_RESET: earliest
+      KAFKA_ENABLE_RAW_SINK: "true"
       KAFKA_SINK_DIR: /data/raw_events_kafka
       SINK_MAX_EVENTS_PER_FILE: "1000"
+      KAFKA_ENABLE_BRONZE_DIRECT: "true"
+      KAFKA_BRONZE_SINK_DIR: /data/bronze_batches_kafka
+      KAFKA_BRONZE_MAX_EVENTS_PER_FILE: "1000"
     volumes:
       - ./server/data:/data
     restart: unless-stopped
