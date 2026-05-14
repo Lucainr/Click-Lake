@@ -61,6 +61,7 @@ FUNNEL_COLUMNS = [
 
 CacheKey = tuple[str, str | None]
 _CACHE: dict[CacheKey, tuple[float, list[dict[str, Any]]]] = {}
+_DASHBOARD_CACHE: dict[CacheKey, tuple[float, dict[str, list[dict[str, Any]]]]] = {}
 
 
 def _normalized_host() -> str:
@@ -117,49 +118,42 @@ def _build_query(table_name: str, columns: list[str], sdk_key: str | None) -> tu
     return query, parameters
 
 
-def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> list[dict[str, Any]]:
-    cache_key: CacheKey = (table_name, sdk_key.strip() if sdk_key else None)
-    now = time.time()
-    ttl = max(0, settings.gold_api_cache_ttl_seconds)
-    cached = _CACHE.get(cache_key)
-    if cached and now - cached[0] < ttl:
-        return cached[1]
-
-    host, token, http_path = _databricks_credentials()
-    query, params = _build_query(table_name, columns, sdk_key)
-
+def _load_sql_module():
     try:
         from databricks import sql
+        return sql
     except ImportError as exc:
         raise ConfigMissingError(
             "databricks-sql-connector is not installed. Run: pip install -r requirements.txt"
         ) from exc
 
+
+def _normalize_dbx_error(exc: Exception) -> Exception:
+    message = str(exc).lower()
+    if "warehouse" in message and (
+        "stopped" in message
+        or "not running" in message
+        or "unavailable" in message
+        or "start" in message
+    ):
+        return DatabricksConnectError(str(exc), warehouse_unavailable=True)
+    if "connect" in message or "dns" in message or "timeout" in message:
+        return DatabricksConnectError(str(exc))
+    return DatabricksQueryError(str(exc))
+
+
+def _execute_query(cursor: Any, table_name: str, columns: list[str], sdk_key: str | None) -> list[dict[str, Any]]:
+    query, params = _build_query(table_name, columns, sdk_key)
+
     try:
-        with sql.connect(
-            server_hostname=host,
-            http_path=http_path,
-            access_token=token,
-        ) as connection:
-            with connection.cursor() as cursor:
-                if params:
-                    cursor.execute(query, params)
-                else:
-                    cursor.execute(query)
-                rows = cursor.fetchall()
-                column_names = [col[0] for col in (cursor.description or [])]
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        rows = cursor.fetchall()
+        column_names = [col[0] for col in (cursor.description or [])]
     except Exception as exc:
-        message = str(exc).lower()
-        if "warehouse" in message and (
-            "stopped" in message
-            or "not running" in message
-            or "unavailable" in message
-            or "start" in message
-        ):
-            raise DatabricksConnectError(str(exc), warehouse_unavailable=True) from exc
-        if "connect" in message or "dns" in message or "timeout" in message:
-            raise DatabricksConnectError(str(exc)) from exc
-        raise DatabricksQueryError(str(exc)) from exc
+        raise _normalize_dbx_error(exc) from exc
 
     try:
         result: list[dict[str, Any]] = []
@@ -170,10 +164,37 @@ def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> lis
                 if idx < len(column_names)
             }
             result.append(mapped)
-        _CACHE[cache_key] = (now, result)
         return result
     except Exception as exc:
         raise ResultParseError(str(exc)) from exc
+
+
+def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> list[dict[str, Any]]:
+    cache_key: CacheKey = (table_name, sdk_key.strip() if sdk_key else None)
+    now = time.time()
+    ttl = max(0, settings.gold_api_cache_ttl_seconds)
+    cached = _CACHE.get(cache_key)
+    if cached and now - cached[0] < ttl:
+        return cached[1]
+
+    host, token, http_path = _databricks_credentials()
+    sql = _load_sql_module()
+
+    try:
+        with sql.connect(
+            server_hostname=host,
+            http_path=http_path,
+            access_token=token,
+        ) as connection:
+            with connection.cursor() as cursor:
+                result = _execute_query(cursor, table_name, columns, sdk_key)
+    except Exception as exc:
+        if isinstance(exc, (ConfigMissingError, DatabricksConnectError, DatabricksQueryError, ResultParseError)):
+            raise
+        raise _normalize_dbx_error(exc) from exc
+
+    _CACHE[cache_key] = (now, result)
+    return result
 
 
 def get_health_rows(sdk_key: str | None = None) -> list[dict[str, Any]]:
@@ -186,3 +207,43 @@ def get_promotion_performance_rows(sdk_key: str | None = None) -> list[dict[str,
 
 def get_campaign_funnel_rows(sdk_key: str | None = None) -> list[dict[str, Any]]:
     return _query_rows(FUNNEL_TABLE, FUNNEL_COLUMNS, sdk_key)
+
+
+def get_dashboard_rows(sdk_key: str | None = None) -> dict[str, list[dict[str, Any]]]:
+    normalized_sdk_key = sdk_key.strip() if sdk_key else None
+    cache_key: CacheKey = ("dashboard", normalized_sdk_key)
+    now = time.time()
+    ttl = max(0, settings.gold_api_cache_ttl_seconds)
+    cached = _DASHBOARD_CACHE.get(cache_key)
+    if cached and now - cached[0] < ttl:
+        return {
+            "health": list(cached[1]["health"]),
+            "promotion": list(cached[1]["promotion"]),
+            "funnel": list(cached[1]["funnel"]),
+        }
+
+    host, token, http_path = _databricks_credentials()
+    sql = _load_sql_module()
+
+    try:
+        with sql.connect(
+            server_hostname=host,
+            http_path=http_path,
+            access_token=token,
+        ) as connection:
+            with connection.cursor() as cursor:
+                health_rows = _execute_query(cursor, HEALTH_TABLE, HEALTH_COLUMNS, normalized_sdk_key)
+                promotion_rows = _execute_query(cursor, PROMOTION_TABLE, PROMOTION_COLUMNS, normalized_sdk_key)
+                funnel_rows = _execute_query(cursor, FUNNEL_TABLE, FUNNEL_COLUMNS, normalized_sdk_key)
+    except Exception as exc:
+        if isinstance(exc, (ConfigMissingError, DatabricksConnectError, DatabricksQueryError, ResultParseError)):
+            raise
+        raise _normalize_dbx_error(exc) from exc
+
+    dashboard = {
+        "health": health_rows,
+        "promotion": promotion_rows,
+        "funnel": funnel_rows,
+    }
+    _DASHBOARD_CACHE[cache_key] = (now, dashboard)
+    return dashboard

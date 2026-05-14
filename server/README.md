@@ -68,6 +68,7 @@ MAX_EVENTS_PER_FILE=500 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `GET /api/gold/health[?sdk_key=...]`
 - `GET /api/gold/promotion-performance[?sdk_key=...]`
 - `GET /api/gold/campaign-funnel[?sdk_key=...]`
+- `GET /api/gold/dashboard[?sdk_key=...]`  # health/promotion/funnel 한번에 조회
 
 Gold API 오류 응답 형식:
 ```json
@@ -121,6 +122,13 @@ Gold API 오류 응답 형식:
 DATABRICKS_HOST=https://<workspace-host>
 DATABRICKS_TOKEN=<pat-token>
 DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/<warehouse-id>
+```
+
+성능 관련 옵션(선택):
+```env
+GOLD_QUERY_LIMIT=500
+GOLD_API_CACHE_TTL_SECONDS=20
+GOLD_WARMUP_ON_STARTUP=true
 ```
 
 설정 예시:
