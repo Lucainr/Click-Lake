@@ -13,9 +13,11 @@ server/
     storage.py    # 날짜 파티션 + 파일 롤링 저장 로직
     routes/
       gold.py     # Gold read-only API endpoint
+      slack.py    # Slack slash command endpoint
     services/
       gold_data.py # Gold 조회 데이터 로딩 서비스(Databricks SQL)
       kafka_producer.py # /collect 이벤트 Kafka publish 서비스
+      slack_query_service.py # Slack 명령 파싱 + Gold 조회 응답 포맷
   scripts/
     export_raw_to_bronze.py
     upload_bronze_batches_to_databricks.py
@@ -77,6 +79,7 @@ MAX_EVENTS_PER_FILE=500 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `GET /api/gold/promotion-performance[?sdk_key=...]`
 - `GET /api/gold/campaign-funnel[?sdk_key=...]`
 - `GET /api/gold/dashboard[?sdk_key=...]`  # health/promotion/funnel 한번에 조회
+- `POST /slack/commands/clicklake`  # Slack slash command 조회형 MVP
 
 Gold API 오류 응답 형식:
 ```json
@@ -94,6 +97,22 @@ Gold API 오류 응답 형식:
 - `DATABRICKS_QUERY_FAILED`
 - `RESULT_PARSE_FAILED`
 - `UNKNOWN_ERROR`
+
+Slack slash command (1단계 조회형):
+- command path: `/clicklake`
+- request URL: `https://<your-server>/slack/commands/clicklake`
+- 지원 명령:
+  - `health [sdk_key]`
+  - `top-invalid [sdk_key] [limit]`
+  - `top-ctr [sdk_key] [limit]`
+  - `funnel [sdk_key] [limit]`
+  - `help`
+- 예시:
+  - `/clicklake health`
+  - `/clicklake health clk_live_demo`
+  - `/clicklake top-invalid clk_live_demo 5`
+  - `/clicklake top-ctr 10`
+  - `/clicklake funnel clk_live_demo`
 - `POST /collect`
   - 요청 예시
     ```json
@@ -158,6 +177,14 @@ KAFKA_TOPIC_RAW_EVENTS=clicklake.events.raw
 KAFKA_CLIENT_ID=clicklake-server
 KAFKA_PUBLISH_TIMEOUT_SECONDS=3
 ```
+
+Slack 관련 옵션:
+```env
+SLACK_SIGNING_SECRET=<replace-me>
+SLACK_ENABLE_SIGNATURE_VALIDATION=false
+```
+- 개발/시연 단계에서는 `SLACK_ENABLE_SIGNATURE_VALIDATION=false`로 시작 가능
+- 실제 Slack 연동 시 `true`로 바꾸고 `SLACK_SIGNING_SECRET` 설정 권장
 
 ## Kafka Consumer (Stage 2)
 - compose 서비스명: `consumer`

@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     kafka_topic_raw_events: str = "clicklake.events.raw"
     kafka_client_id: str = "clicklake-server"
     kafka_publish_timeout_seconds: float = 3.0
+    slack_signing_secret: str | None = None
+    slack_enable_signature_validation: bool = False
 
     @property
     def raw_events_base_abs_dir(self) -> Path:
