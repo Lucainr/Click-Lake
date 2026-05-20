@@ -14,6 +14,7 @@ from .services.kafka_producer import (
 )
 from .storage import append_raw_events_partitioned
 from .routes.gold import router as gold_router
+from .routes.slack import router as slack_router
 
 logger = logging.getLogger("clicklake.collector")
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -29,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(gold_router)
+app.include_router(slack_router)
 
 
 @app.on_event("startup")

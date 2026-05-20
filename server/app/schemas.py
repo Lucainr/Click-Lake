@@ -82,3 +82,8 @@ class GoldDashboardResponse(BaseModel):
     health: List[GoldHealthRow]
     promotion: List[GoldPromotionPerformanceRow]
     funnel: List[GoldCampaignFunnelRow]
+
+
+class SlackCommandResponse(BaseModel):
+    response_type: str = "ephemeral"
+    text: str

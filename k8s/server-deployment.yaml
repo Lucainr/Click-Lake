@@ -102,6 +102,17 @@ spec:
                 configMapKeyRef:
                   name: clicklake-config
                   key: KAFKA_PUBLISH_TIMEOUT_SECONDS
+            - name: SLACK_ENABLE_SIGNATURE_VALIDATION
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: SLACK_ENABLE_SIGNATURE_VALIDATION
+            - name: SLACK_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: clicklake-secret
+                  key: SLACK_SIGNING_SECRET
+                  optional: true
           readinessProbe:
             httpGet:
               path: /health

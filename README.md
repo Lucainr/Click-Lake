@@ -60,3 +60,18 @@ dashboard ↔ server 통신 방식:
 - 브라우저에서는 `server` 서비스 DNS를 직접 해석하지 못하므로,
   dashboard는 `VITE_API_BASE_URL=/`(same-origin)로 요청합니다.
 - Vite dev server가 `/api` 요청을 `http://clicklake-server-service:8000`으로 프록시합니다.
+
+## Slack 조회형 연동 (1단계 MVP)
+FastAPI에 Slack slash command endpoint를 추가했습니다.
+
+- endpoint: `POST /slack/commands/clicklake`
+- 명령:
+  - `health [sdk_key]`
+  - `top-invalid [sdk_key] [limit]`
+  - `top-ctr [sdk_key] [limit]`
+  - `funnel [sdk_key] [limit]`
+  - `help`
+
+환경변수(`server/.env`):
+- `SLACK_ENABLE_SIGNATURE_VALIDATION=false` (개발 기본)
+- `SLACK_SIGNING_SECRET=<replace-me>` (실서비스 권장)
