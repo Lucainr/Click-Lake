@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clicklake-server-service
+  namespace: clicklake
+  labels:
+    app: clicklake-server
+    app.kubernetes.io/name: clicklake
+    app.kubernetes.io/component: server
+spec:
+  type: ClusterIP
+  selector:
+    app: clicklake-server
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
