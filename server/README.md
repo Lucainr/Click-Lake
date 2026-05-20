@@ -396,3 +396,112 @@ python scripts/run_pipeline.py --dry-run --gold-only
 - export 실패: raw JSONL 경로/체크포인트 파일 권한 확인
 - upload 실패: `DATABRICKS_VOLUME_PATH_DIRECT`/`DATABRICKS_VOLUME_PATH_KAFKA`/토큰 권한 확인
 - SQL 실패: SQL Warehouse 상태(실행 중 여부), Gold/Bronze 테이블 권한, SQL 파일 경로 확인
+
+## 대규모 이벤트 시뮬레이터 (수십만 건)
+`scripts/simulate_events.py`는 Bronze/Silver/Gold 검증용 대량 이벤트를 생성합니다.
+
+특징:
+- 기본 200,000 events 생성
+- 세션 기반 funnel (`page_view -> promotion_view -> promotion_click -> product_view -> add_to_cart`)
+- 캠페인 프로파일(A/B/C/D)로 CTR/전환 차이 유도
+- invalid/duplicate 비율 주입 가능
+- `api` / `file` / `both` 모드 지원
+
+### 실행 예시
+API 모드 (실제 `/collect` 전송):
+```bash
+cd server
+source .venv/bin/activate
+python scripts/simulate_events.py \
+  --mode api \
+  --events 200000 \
+  --days 14 \
+  --sdk-keys 5 \
+  --campaigns 20 \
+  --promotions 100 \
+  --products 500 \
+  --invalid-ratio 0.03 \
+  --duplicate-ratio 0.01 \
+  --batch-size 500 \
+  --concurrency 10 \
+  --collect-url http://localhost:8000/collect \
+  --seed 42
+```
+
+파일 모드 (direct/kafka source 분포 제어):
+```bash
+python scripts/simulate_events.py \
+  --mode file \
+  --events 200000 \
+  --direct-ratio 0.6 \
+  --invalid-ratio 0.03 \
+  --duplicate-ratio 0.01 \
+  --max-events-per-file 1000 \
+  --seed 42
+```
+
+동시 모드 (API 전송 + 파일 생성):
+```bash
+python scripts/simulate_events.py --mode both --events 200000 --seed 42
+```
+
+주요 옵션:
+- `--events`, `--days`, `--sdk-keys`, `--campaigns`, `--promotions`, `--products`
+- `--invalid-ratio`, `--duplicate-ratio`
+- `--mode api|file|both`
+- `--batch-size`, `--concurrency`, `--collect-url`
+- `--direct-ratio` (file/both 모드 source 분포)
+- `--seed`
+
+### 대량 생성 후 재실행 순서
+1) 시뮬레이터 실행
+2) `python scripts/export_raw_to_bronze.py`
+3) `python scripts/upload_bronze_batches_to_databricks.py`
+4) `python scripts/run_pipeline.py --skip-export --skip-upload`  
+   (Bronze/Silver/Gold SQL만 갱신)
+
+### 검증 쿼리
+Bronze source 분포:
+```sql
+SELECT ingestion_source, COUNT(*) AS cnt
+FROM workspace.clicklake_bronze.events_raw_json
+GROUP BY ingestion_source
+ORDER BY cnt DESC;
+```
+
+Silver valid 분포:
+```sql
+SELECT ingestion_source, COUNT(*) AS cnt
+FROM workspace.clicklake_silver.silver_events_json
+GROUP BY ingestion_source
+ORDER BY cnt DESC;
+```
+
+Silver invalid 분포:
+```sql
+SELECT ingestion_source, error_code, COUNT(*) AS cnt
+FROM workspace.clicklake_silver.silver_invalid_events_json
+GROUP BY ingestion_source, error_code
+ORDER BY ingestion_source, cnt DESC;
+```
+
+Gold health:
+```sql
+SELECT *
+FROM workspace.clicklake_gold.gold_workspace_health_daily_json
+ORDER BY event_date DESC, raw_event_count DESC;
+```
+
+Gold promotion:
+```sql
+SELECT *
+FROM workspace.clicklake_gold.gold_promotion_performance_daily_json
+ORDER BY event_date DESC, promotion_views DESC;
+```
+
+Gold funnel:
+```sql
+SELECT *
+FROM workspace.clicklake_gold.gold_campaign_funnel_daily_json
+ORDER BY event_date DESC, promotion_view_sessions DESC;
+```

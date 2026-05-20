@@ -18,6 +18,17 @@ docker compose up --build
 - `kafka` 컨테이너: ingest 이벤트 publish 대상 broker
 - `consumer` 컨테이너: Kafka 메시지를 raw sink + Bronze direct JSONL sink로 저장
 
+## 대규모 이벤트 시뮬레이터
+수십만 건 규모 테스트 데이터 생성 스크립트:
+- `server/scripts/simulate_events.py`
+
+빠른 예시:
+```bash
+cd server
+source .venv/bin/activate
+python scripts/simulate_events.py --mode api --events 200000 --seed 42
+```
+
 ## Kubernetes (1단계: app-level only)
 `server`, `dashboard`, `consumer`만 Kubernetes manifest로 분리했습니다.
 Kafka는 이번 단계에서 Kubernetes 리소스로 포함하지 않았습니다.
