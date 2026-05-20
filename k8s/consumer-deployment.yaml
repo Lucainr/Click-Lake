@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clicklake-consumer
+  namespace: clicklake
+  labels:
+    app: clicklake-consumer
+    app.kubernetes.io/name: clicklake
+    app.kubernetes.io/component: consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clicklake-consumer
+  template:
+    metadata:
+      labels:
+        app: clicklake-consumer
+        app.kubernetes.io/name: clicklake
+        app.kubernetes.io/component: consumer
+    spec:
+      containers:
+        - name: consumer
+          image: clicklake-consumer:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: KAFKA_TOPIC_RAW_EVENTS
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_TOPIC_RAW_EVENTS
+            - name: KAFKA_CONSUMER_GROUP
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_CONSUMER_GROUP
+            - name: KAFKA_AUTO_OFFSET_RESET
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_AUTO_OFFSET_RESET
+            - name: KAFKA_ENABLE_RAW_SINK
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_ENABLE_RAW_SINK
+            - name: KAFKA_ENABLE_BRONZE_DIRECT
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_ENABLE_BRONZE_DIRECT
+            - name: KAFKA_SINK_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_SINK_DIR
+            - name: SINK_MAX_EVENTS_PER_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: SINK_MAX_EVENTS_PER_FILE
+            - name: KAFKA_BRONZE_SINK_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_BRONZE_SINK_DIR
+            - name: KAFKA_BRONZE_MAX_EVENTS_PER_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_BRONZE_MAX_EVENTS_PER_FILE
+          volumeMounts:
+            - name: consumer-data
+              mountPath: /data
+      volumes:
+        - name: consumer-data
+          emptyDir: {}

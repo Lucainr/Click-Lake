@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clicklake-dashboard-service
+  namespace: clicklake
+  labels:
+    app: clicklake-dashboard
+    app.kubernetes.io/name: clicklake
+    app.kubernetes.io/component: dashboard
+spec:
+  type: ClusterIP
+  selector:
+    app: clicklake-dashboard
+  ports:
+    - name: http
+      port: 5173
+      targetPort: 5173

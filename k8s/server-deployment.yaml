@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clicklake-server
+  namespace: clicklake
+  labels:
+    app: clicklake-server
+    app.kubernetes.io/name: clicklake
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clicklake-server
+  template:
+    metadata:
+      labels:
+        app: clicklake-server
+        app.kubernetes.io/name: clicklake
+        app.kubernetes.io/component: server
+    spec:
+      containers:
+        - name: server
+          image: clicklake-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: APP_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: APP_NAME
+            - name: ALLOW_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: ALLOW_ORIGINS
+            - name: RAW_EVENTS_BASE_REL_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: RAW_EVENTS_BASE_REL_DIR
+            - name: MAX_EVENTS_PER_FILE
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: MAX_EVENTS_PER_FILE
+            - name: GOLD_QUERY_LIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: GOLD_QUERY_LIMIT
+            - name: GOLD_API_CACHE_TTL_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: GOLD_API_CACHE_TTL_SECONDS
+            - name: GOLD_WARMUP_ON_STARTUP
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: GOLD_WARMUP_ON_STARTUP
+            - name: DATABRICKS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: DATABRICKS_HOST
+            - name: DATABRICKS_HTTP_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: DATABRICKS_HTTP_PATH
+            - name: DATABRICKS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: clicklake-secret
+                  key: DATABRICKS_TOKEN
+            - name: KAFKA_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_ENABLED
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: KAFKA_TOPIC_RAW_EVENTS
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_TOPIC_RAW_EVENTS
+            - name: KAFKA_CLIENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_CLIENT_ID
+            - name: KAFKA_PUBLISH_TIMEOUT_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: KAFKA_PUBLISH_TIMEOUT_SECONDS
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20

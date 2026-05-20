@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clicklake-config
+  namespace: clicklake
+  labels:
+    app.kubernetes.io/name: clicklake
+    app.kubernetes.io/component: config
+data:
+  # Server
+  APP_NAME: "Click Lake Collector"
+  ALLOW_ORIGINS: '["*"]'
+  RAW_EVENTS_BASE_REL_DIR: "data/raw_events"
+  MAX_EVENTS_PER_FILE: "1000"
+  GOLD_QUERY_LIMIT: "500"
+  GOLD_API_CACHE_TTL_SECONDS: "20"
+  GOLD_WARMUP_ON_STARTUP: "true"
+
+  # Databricks (non-secret)
+  DATABRICKS_HOST: "https://dbc-6cb5d036-5187.cloud.databricks.com"
+  DATABRICKS_HTTP_PATH: "/sql/1.0/warehouses/e09db2424b5e3cd2"
+
+  # Kafka for server producer
+  KAFKA_ENABLED: "true"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_TOPIC_RAW_EVENTS: "clicklake.events.raw"
+  KAFKA_CLIENT_ID: "clicklake-server"
+  KAFKA_PUBLISH_TIMEOUT_SECONDS: "3"
+
+  # Dashboard runtime (Vite dev server proxy mode)
+  VITE_API_BASE_URL: "/"
+  VITE_DEV_PROXY_TARGET: "http://clicklake-server-service:8000"
+
+  # Consumer
+  KAFKA_CONSUMER_GROUP: "clicklake-consumer"
+  KAFKA_AUTO_OFFSET_RESET: "earliest"
+  KAFKA_ENABLE_RAW_SINK: "true"
+  KAFKA_SINK_DIR: "/data/raw_events_kafka"
+  SINK_MAX_EVENTS_PER_FILE: "1000"
+  KAFKA_ENABLE_BRONZE_DIRECT: "true"
+  KAFKA_BRONZE_SINK_DIR: "/data/bronze_batches_kafka"
+  KAFKA_BRONZE_MAX_EVENTS_PER_FILE: "1000"
