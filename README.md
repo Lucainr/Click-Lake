@@ -1,88 +1,38 @@
-# Click-Lake
+# Click Lake
 
-## Docker (3단계: server + dashboard + kafka + consumer)
-현재 구조를 Docker Compose로 기동할 수 있습니다.
+Click Lake는 이벤트 수집부터 분석 집계까지 한 번에 검증할 수 있는 이벤트 데이터 파이프라인 프로젝트입니다.
 
-```bash
-docker compose up --build
-```
+## 프로젝트 목적
+- 웹/앱 이벤트를 안정적으로 수집
+- 원본(raw) 보존 + 정제(Silver) + 지표(Gold) 계층화
+- 운영 전 단계에서 대용량 시뮬레이션, 중복 제거, 품질 검증까지 수행
+- Dashboard / Slack 질의로 결과를 빠르게 확인
 
-접속:
-- FastAPI: `http://localhost:8000/health`
-- Dashboard: `http://localhost:5173`
-- Kafka(호스트 테스트용 listener): `localhost:29092`
+## 아키텍처 요약
+- SDK/테스트 페이지 → FastAPI `/collect`
+- FastAPI → direct raw JSONL 저장 + Kafka publish
+- Consumer → Kafka consume 후 raw sink / Bronze direct writer 저장
+- Export/Upload → Databricks Volume 업로드
+- Databricks Bronze / Silver / Gold SQL 변환 및 집계
+- Dashboard / Slack 조회 API로 결과 확인
 
-구성:
-- `server` 컨테이너: FastAPI (`uvicorn app.main:app`)
-- `dashboard` 컨테이너: Vite dev server
-- `kafka` 컨테이너: ingest 이벤트 publish 대상 broker
-- `consumer` 컨테이너: Kafka 메시지를 raw sink + Bronze direct JSONL sink로 저장
+## 핵심 기능
+- 이벤트 유효성 검증 및 invalid 분리
+- `event_id` 기준 dedup / idempotency 강화
+- direct vs kafka `ingestion_source` 비교 가능
+- 파이프라인 오케스트레이터(`run_pipeline.py`) + dry-run
+- Slack slash command 기반 조회형 MVP
+- Docker Compose 기반 실행
+- Kubernetes 매니페스트(server/dashboard/consumer)
 
-## 대규모 이벤트 시뮬레이터
-수십만 건 규모 테스트 데이터 생성 스크립트:
-- `server/scripts/simulate_events.py`
+## 현재 검증 가능한 포인트
+- Bronze: source 분포, raw count, source_file 추적
+- Silver: valid/invalid 분포, error_code 분포, dedup 결과
+- Gold: health / promotion performance / campaign funnel 지표 비교
 
-빠른 예시:
-```bash
-cd server
-source .venv/bin/activate
-python scripts/simulate_events.py --mode api --events 200000 --seed 42
-```
-
-## Kubernetes (1단계: app-level only)
-`server`, `dashboard`, `consumer`만 Kubernetes manifest로 분리했습니다.
-Kafka는 이번 단계에서 Kubernetes 리소스로 포함하지 않았습니다.
-
-manifest 위치:
-- `k8s/namespace.yaml`
-- `k8s/configmap.yaml`
-- `k8s/secret.example.yaml`
-- `k8s/server-deployment.yaml`
-- `k8s/server-service.yaml`
-- `k8s/dashboard-deployment.yaml`
-- `k8s/dashboard-service.yaml`
-- `k8s/consumer-deployment.yaml`
-
-적용 순서(권장):
-```bash
-kubectl apply -f k8s/namespace.yaml
-# secret.example.yaml을 secret.yaml로 복사 후 실제 값 입력
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/secret.yaml
-kubectl apply -f k8s/server-deployment.yaml
-kubectl apply -f k8s/server-service.yaml
-kubectl apply -f k8s/dashboard-deployment.yaml
-kubectl apply -f k8s/dashboard-service.yaml
-kubectl apply -f k8s/consumer-deployment.yaml
-```
-
-한 번에 적용:
-```bash
-kubectl apply -f k8s/
-```
-
-로컬 확인 예시(port-forward):
-```bash
-kubectl -n clicklake port-forward svc/clicklake-server-service 8000:8000
-kubectl -n clicklake port-forward svc/clicklake-dashboard-service 5173:5173
-```
-
-dashboard ↔ server 통신 방식:
-- 브라우저에서는 `server` 서비스 DNS를 직접 해석하지 못하므로,
-  dashboard는 `VITE_API_BASE_URL=/`(same-origin)로 요청합니다.
-- Vite dev server가 `/api` 요청을 `http://clicklake-server-service:8000`으로 프록시합니다.
-
-## Slack 조회형 연동 (1단계 MVP)
-FastAPI에 Slack slash command endpoint를 추가했습니다.
-
-- endpoint: `POST /slack/commands/clicklake`
-- 명령:
-  - `health [sdk_key]`
-  - `top-invalid [sdk_key] [limit]`
-  - `top-ctr [sdk_key] [limit]`
-  - `funnel [sdk_key] [limit]`
-  - `help`
-
-환경변수(`server/.env`):
-- `SLACK_ENABLE_SIGNATURE_VALIDATION=false` (개발 기본)
-- `SLACK_SIGNING_SECRET=<replace-me>` (실서비스 권장)
+## 기술 스택
+- Backend: FastAPI, Python
+- Streaming: Kafka
+- Storage/Analytics: Databricks (Bronze/Silver/Gold)
+- Frontend: React + Vite Dashboard
+- Infra: Docker Compose, Kubernetes

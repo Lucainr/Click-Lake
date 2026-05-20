@@ -1,55 +1,6 @@
-# Node / TypeScript
-node_modules/
-dist/
-*.tsbuildinfo
-.vite/
-.npm/
+# Ignore everything by default
+*
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-*.log
-
-# Environment / local
-.env
-.env.local
-.env.*
-!.env.example
-!server/.env.example
-server/.env
-dashboard/.env
-consumer/.env
-
-# OS / editor
-.DS_Store
-.idea/
-.vscode/
-
-# Coverage / tests
-coverage/
-
-# Build artifacts
-*.tgz
-
-# Local npm cache
-.npm-cache/
-
-# Python venv for server
-server/.venv/
-**/__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-
-# Raw collected events (local runtime artifact)
-server/data/raw_events/
-server/data/raw_events_kafka/
-server/data/bronze_batches_kafka/
-server/data/checkpoints/
-server/out/bronze_batches/
-
-# Kubernetes local secret (never commit real credentials)
-k8s/secret.yaml
-!k8s/secret.example.yaml
+# Keep only repository landing files
+!.gitignore
+!README.md
