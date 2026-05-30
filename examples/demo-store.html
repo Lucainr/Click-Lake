@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Click Lake Demo Store</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        background: #f5f7fb;
+        color: #1f2937;
+      }
+      .wrap {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .panel {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      .row {
+        display: grid;
+        gap: 12px;
+      }
+      .row-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .row-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .card {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        background: #fff;
+        padding: 12px;
+      }
+      .muted {
+        color: #6b7280;
+        font-size: 13px;
+      }
+      button {
+        appearance: none;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 14px;
+        background: #ffffff;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #f3f4f6;
+      }
+      .primary {
+        background: #111827;
+        color: #fff;
+        border-color: #111827;
+      }
+      .primary:hover {
+        background: #1f2937;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 14px;
+      }
+      .log {
+        background: #0b1020;
+        color: #d1d5db;
+        border-radius: 8px;
+        padding: 12px;
+        min-height: 120px;
+        max-height: 220px;
+        overflow: auto;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      @media (max-width: 900px) {
+        .row-2,
+        .row-3 {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Click Lake Demo Store</h1>
+      <p class="muted">
+        실제 페이지 행동 기반 SDK 검증용 데모. 브라우저 콘솔 + FastAPI 로그 + consumer 로그 + Databricks를 함께 확인하세요.
+      </p>
+
+      <section class="panel row row-3">
+        <div>
+          <label class="muted">SDK Key</label>
+          <input id="sdk-key" value="clk_live_demo" />
+        </div>
+        <div>
+          <label class="muted">Collect Endpoint</label>
+          <input id="endpoint" value="http://localhost:8000/collect" />
+        </div>
+        <div>
+          <label class="muted">상태</label>
+          <div id="status" style="padding-top: 8px; font-weight: 600">Not initialized</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 style="margin-top: 0">프로모션 배너</h2>
+        <div class="row row-2">
+          <div class="card">
+            <h3>봄 패션 특가전</h3>
+            <p class="muted">promotion_view / promotion_click 검증</p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap">
+              <button id="btn-promotion-view">노출 이벤트</button>
+              <button id="btn-promotion-click">배너 클릭</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>상품 상세</h3>
+            <p class="muted">product_view / add_to_cart 검증</p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap">
+              <button id="btn-product-view">상품 보기</button>
+              <button id="btn-add-to-cart">장바구니 담기</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 style="margin-top: 0">시나리오 실행</h2>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
+          <button id="btn-init" class="primary">1) SDK 초기화</button>
+          <button id="btn-full-flow" class="primary">2) 전체 퍼널 실행</button>
+          <button id="btn-multi-session">3) 20세션 자동 실행</button>
+          <button id="btn-flush">4) 즉시 flush</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 style="margin-top: 0">로컬 로그</h2>
+        <div id="log" class="log"></div>
+      </section>
+    </div>
+
+    <script type="module">
+      import { ClickLake } from "../dist/index.mjs"
+
+      const promotion = {
+        promotion_id: "promo_home_001",
+        promotion_name: "봄 아우터 기획전 배너",
+        campaign_id: "camp_spring_001",
+        campaign_name: "봄 패션 특가전",
+        placement: "main_hero",
+        creative_id: "creative_home_001",
+        creative_type: "image",
+        position_index: 1
+      }
+
+      const product = {
+        product_id: "prod_001",
+        product_name: "오버핏 트렌치 코트",
+        category_id: "cat_outer",
+        category_name: "아우터"
+      }
+
+      let initialized = false
+      const statusEl = document.getElementById("status")
+      const logEl = document.getElementById("log")
+
+      const log = (message) => {
+        const stamp = new Date().toISOString()
+        logEl.textContent += `[${stamp}] ${message}\n`
+        logEl.scrollTop = logEl.scrollHeight
+      }
+
+      const initSdk = () => {
+        const sdkKey = document.getElementById("sdk-key").value.trim()
+        const endpoint = document.getElementById("endpoint").value.trim()
+
+        ClickLake.init({
+          sdkKey,
+          endpoint,
+          debug: true,
+          autoPageView: true,
+          batchSize: 5,
+          flushIntervalMs: 3000,
+          maxRetries: 2
+        })
+
+        initialized = true
+        statusEl.textContent = `Initialized (sdk_key=${sdkKey})`
+        log(`SDK initialized: endpoint=${endpoint}`)
+      }
+
+      const ensureInit = () => {
+        if (!initialized) {
+          initSdk()
+        }
+      }
+
+      const sendPromotionView = () => {
+        ensureInit()
+        ClickLake.promotionView({ ...promotion })
+        log("promotion_view sent")
+      }
+
+      const sendPromotionClick = () => {
+        ensureInit()
+        ClickLake.promotionClick({
+          ...promotion,
+          click_target_url: "/products/prod_001",
+          click_x: 112,
+          click_y: 44
+        })
+        log("promotion_click sent")
+      }
+
+      const sendProductView = () => {
+        ensureInit()
+        ClickLake.productView({
+          ...product,
+          source_promotion_id: promotion.promotion_id,
+          source_campaign_id: promotion.campaign_id
+        })
+        log("product_view sent")
+      }
+
+      const sendAddToCart = () => {
+        ensureInit()
+        ClickLake.addToCart({
+          ...product,
+          quantity: 1,
+          unit_price: 129000,
+          currency: "KRW",
+          source_promotion_id: promotion.promotion_id,
+          source_campaign_id: promotion.campaign_id
+        })
+        log("add_to_cart sent")
+      }
+
+      const runFullFlow = () => {
+        sendPromotionView()
+        sendPromotionClick()
+        sendProductView()
+        sendAddToCart()
+      }
+
+      const runMultiSession = () => {
+        ensureInit()
+        for (let i = 0; i < 20; i += 1) {
+          setTimeout(() => {
+            sendPromotionView()
+            if (Math.random() < 0.8) sendPromotionClick()
+            if (Math.random() < 0.6) sendProductView()
+            if (Math.random() < 0.3) sendAddToCart()
+          }, i * 120)
+        }
+        log("multi-session flow started (20 sessions)")
+      }
+
+      document.getElementById("btn-init").addEventListener("click", initSdk)
+      document.getElementById("btn-promotion-view").addEventListener("click", sendPromotionView)
+      document.getElementById("btn-promotion-click").addEventListener("click", sendPromotionClick)
+      document.getElementById("btn-product-view").addEventListener("click", sendProductView)
+      document.getElementById("btn-add-to-cart").addEventListener("click", sendAddToCart)
+      document.getElementById("btn-full-flow").addEventListener("click", runFullFlow)
+      document.getElementById("btn-multi-session").addEventListener("click", runMultiSession)
+      document.getElementById("btn-flush").addEventListener("click", () => {
+        ensureInit()
+        ClickLake.flush()
+        log("manual flush called")
+      })
+
+      log("Ready. Click 'SDK 초기화' and run flows.")
+    </script>
+  </body>
+</html>

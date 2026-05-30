@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: clicklake-redis-service
+  namespace: clicklake
+  labels:
+    app.kubernetes.io/name: clicklake
+    app.kubernetes.io/component: redis
+spec:
+  selector:
+    app: clicklake-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
