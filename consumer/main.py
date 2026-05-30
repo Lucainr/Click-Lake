@@ -37,6 +37,8 @@ BRONZE_MAX_EVENTS_PER_FILE = max(
     1, int(os.getenv("KAFKA_BRONZE_MAX_EVENTS_PER_FILE", "1000"))
 )
 
+DLQ_DIR = Path(os.getenv("KAFKA_DLQ_DIR", "/data/dlq"))
+
 _running = True
 _raw_file_state: dict[str, tuple[Path, int, int]] = {}
 _bronze_file_state: dict[str, tuple[Path, int, int]] = {}
@@ -204,6 +206,38 @@ def _to_bronze_record(
     }
 
 
+def _write_dlq_record(
+    *,
+    topic: str,
+    partition: int,
+    offset: int,
+    payload: Any,
+    reason: str,
+) -> None:
+    DLQ_DIR.mkdir(parents=True, exist_ok=True)
+    date_str = datetime.now(timezone.utc).date().isoformat()
+    dlq_file = DLQ_DIR / f"dlq-{date_str}.jsonl"
+    record = {
+        "failed_at": _utc_now_iso(),
+        "topic": topic,
+        "partition": partition,
+        "offset": offset,
+        "reason": reason,
+        "payload": payload,
+    }
+    with dlq_file.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False))
+        handle.write("\n")
+    logger.warning(
+        "dlq record written topic=%s partition=%d offset=%d file=%s reason=%s",
+        topic,
+        partition,
+        offset,
+        str(dlq_file),
+        reason,
+    )
+
+
 def _process_payload(payload: dict[str, Any], *, source_file: str) -> tuple[int, int]:
     partition_date, received_at, sdk_key, events = _normalize_records(payload)
     raw_written = 0
@@ -267,6 +301,7 @@ def main() -> None:
         RAW_SINK_DIR.mkdir(parents=True, exist_ok=True)
     if ENABLE_BRONZE_DIRECT:
         BRONZE_SINK_DIR.mkdir(parents=True, exist_ok=True)
+    DLQ_DIR.mkdir(parents=True, exist_ok=True)
 
     if not ENABLE_RAW_SINK and not ENABLE_BRONZE_DIRECT:
         logger.warning("both sinks disabled; consumer will only commit offsets")
@@ -344,7 +379,22 @@ def main() -> None:
                             message.offset,
                             str(exc),
                         )
-                        # skip poison-message to avoid infinite retry loop in MVP stage
+                        try:
+                            _write_dlq_record(
+                                topic=message.topic,
+                                partition=message.partition,
+                                offset=message.offset,
+                                payload=message.value,
+                                reason=str(exc),
+                            )
+                        except Exception as dlq_exc:
+                            logger.error(
+                                "dlq write also failed topic=%s partition=%d offset=%d reason=%s",
+                                message.topic,
+                                message.partition,
+                                message.offset,
+                                str(dlq_exc),
+                            )
                         consumer.commit()
     finally:
         consumer.close()

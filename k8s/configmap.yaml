@@ -46,3 +46,4 @@ data:
   KAFKA_ENABLE_BRONZE_DIRECT: "true"
   KAFKA_BRONZE_SINK_DIR: "/data/bronze_batches_kafka"
   KAFKA_BRONZE_MAX_EVENTS_PER_FILE: "1000"
+  KAFKA_DLQ_DIR: "/data/dlq"
