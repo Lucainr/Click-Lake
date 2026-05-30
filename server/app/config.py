@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     collect_require_kafka_publish: bool = True
     slack_signing_secret: str | None = None
     slack_enable_signature_validation: bool = False
+    redis_url: str = "redis://redis:6379/0"
 
     @property
     def raw_events_base_abs_dir(self) -> Path:

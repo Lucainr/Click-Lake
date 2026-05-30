@@ -20,12 +20,22 @@ services:
       - kafka_data:/var/lib/kafka/data
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: clicklake-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
   server:
     build:
       context: ./server
     container_name: clicklake-server
     depends_on:
       - kafka
+      - redis
     env_file:
       - ./server/.env
     environment:
@@ -35,6 +45,7 @@ services:
       COLLECT_DIRECT_RAW_ENABLED: "false"
       COLLECT_REQUIRE_KAFKA_PUBLISH: "true"
       WEB_CONCURRENCY: "4"
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     volumes:
@@ -80,3 +91,4 @@ services:
 
 volumes:
   kafka_data:
+  redis_data:

@@ -1,6 +1,8 @@
+import json
+import logging
+import time
 from datetime import date, datetime
 from decimal import Decimal
-import time
 from typing import Any
 from urllib.parse import urlparse
 
@@ -59,9 +61,45 @@ FUNNEL_COLUMNS = [
     "click_to_add_to_cart_rate",
 ]
 
-CacheKey = tuple[str, str | None]
-_CACHE: dict[CacheKey, tuple[float, list[dict[str, Any]]]] = {}
-_DASHBOARD_CACHE: dict[CacheKey, tuple[float, dict[str, list[dict[str, Any]]]]] = {}
+_redis_client: Any | None = None
+
+
+def _get_redis() -> Any | None:
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+    try:
+        import redis
+        _redis_client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        _redis_client.ping()
+        return _redis_client
+    except Exception as exc:
+        logging.getLogger("clicklake.gold_data").warning("redis unavailable, falling back to in-process cache: %s", exc)
+        return None
+
+
+_FALLBACK_CACHE: dict[str, tuple[float, str]] = {}
+
+
+def _cache_get(key: str) -> Any | None:
+    r = _get_redis()
+    if r is not None:
+        raw = r.get(key)
+        return json.loads(raw) if raw is not None else None
+
+    entry = _FALLBACK_CACHE.get(key)
+    if entry and time.time() - entry[0] < max(0, settings.gold_api_cache_ttl_seconds):
+        return json.loads(entry[1])
+    return None
+
+
+def _cache_set(key: str, value: Any) -> None:
+    ttl = max(1, settings.gold_api_cache_ttl_seconds)
+    r = _get_redis()
+    if r is not None:
+        r.setex(key, ttl, json.dumps(value))
+        return
+    _FALLBACK_CACHE[key] = (time.time(), json.dumps(value))
 
 
 def _normalized_host() -> str:
@@ -170,12 +208,12 @@ def _execute_query(cursor: Any, table_name: str, columns: list[str], sdk_key: st
 
 
 def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> list[dict[str, Any]]:
-    cache_key: CacheKey = (table_name, sdk_key.strip() if sdk_key else None)
-    now = time.time()
-    ttl = max(0, settings.gold_api_cache_ttl_seconds)
-    cached = _CACHE.get(cache_key)
-    if cached and now - cached[0] < ttl:
-        return cached[1]
+    normalized_key = sdk_key.strip() if sdk_key else None
+    cache_key = f"gold:table:{table_name}:{normalized_key or 'all'}"
+
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     host, token, http_path = _databricks_credentials()
     sql = _load_sql_module()
@@ -193,7 +231,7 @@ def _query_rows(table_name: str, columns: list[str], sdk_key: str | None) -> lis
             raise
         raise _normalize_dbx_error(exc) from exc
 
-    _CACHE[cache_key] = (now, result)
+    _cache_set(cache_key, result)
     return result
 
 
@@ -211,16 +249,11 @@ def get_campaign_funnel_rows(sdk_key: str | None = None) -> list[dict[str, Any]]
 
 def get_dashboard_rows(sdk_key: str | None = None) -> dict[str, list[dict[str, Any]]]:
     normalized_sdk_key = sdk_key.strip() if sdk_key else None
-    cache_key: CacheKey = ("dashboard", normalized_sdk_key)
-    now = time.time()
-    ttl = max(0, settings.gold_api_cache_ttl_seconds)
-    cached = _DASHBOARD_CACHE.get(cache_key)
-    if cached and now - cached[0] < ttl:
-        return {
-            "health": list(cached[1]["health"]),
-            "promotion": list(cached[1]["promotion"]),
-            "funnel": list(cached[1]["funnel"]),
-        }
+    cache_key = f"gold:dashboard:{normalized_sdk_key or 'all'}"
+
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     host, token, http_path = _databricks_credentials()
     sql = _load_sql_module()
@@ -240,10 +273,10 @@ def get_dashboard_rows(sdk_key: str | None = None) -> dict[str, list[dict[str, A
             raise
         raise _normalize_dbx_error(exc) from exc
 
-    dashboard = {
+    dashboard: dict[str, list[dict[str, Any]]] = {
         "health": health_rows,
         "promotion": promotion_rows,
         "funnel": funnel_rows,
     }
-    _DASHBOARD_CACHE[cache_key] = (now, dashboard)
+    _cache_set(cache_key, dashboard)
     return dashboard

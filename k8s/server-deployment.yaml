@@ -131,6 +131,11 @@ spec:
                   name: clicklake-secret
                   key: SLACK_SIGNING_SECRET
                   optional: true
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: REDIS_URL
           readinessProbe:
             httpGet:
               path: /health

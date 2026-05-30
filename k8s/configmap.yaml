@@ -30,6 +30,9 @@ data:
   COLLECT_REQUIRE_KAFKA_PUBLISH: "true"
   WEB_CONCURRENCY: "4"
 
+  # Redis shared cache
+  REDIS_URL: "redis://clicklake-redis-service:6379/0"
+
   # Slack slash command
   SLACK_ENABLE_SIGNATURE_VALIDATION: "true"
 

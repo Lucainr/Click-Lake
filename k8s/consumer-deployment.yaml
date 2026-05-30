@@ -24,6 +24,10 @@ spec:
           image: clicklake-consumer:latest
           imagePullPolicy: IfNotPresent
           env:
+            - name: KAFKA_CONSUMER_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: KAFKA_BOOTSTRAP_SERVERS
               valueFrom:
                 configMapKeyRef:
