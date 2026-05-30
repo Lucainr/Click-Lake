@@ -26,6 +26,9 @@ data:
   KAFKA_TOPIC_RAW_EVENTS: "clicklake.events.raw"
   KAFKA_CLIENT_ID: "clicklake-server"
   KAFKA_PUBLISH_TIMEOUT_SECONDS: "3"
+  COLLECT_DIRECT_RAW_ENABLED: "false"
+  COLLECT_REQUIRE_KAFKA_PUBLISH: "true"
+  WEB_CONCURRENCY: "4"
 
   # Slack slash command
   SLACK_ENABLE_SIGNATURE_VALIDATION: "true"

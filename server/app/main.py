@@ -78,26 +78,35 @@ async def collect(payload: CollectRequest) -> CollectResponse:
     logger.info("received sdk_key=%s events=%d", payload.sdk_key, event_count)
     logger.debug("payload=%s", payload.json())
 
-    try:
-        store_result = append_raw_events_partitioned(
-            sdk_key=payload.sdk_key,
-            events=payload.events,
-            base_dir=settings.raw_events_base_abs_dir,
-            base_rel_dir=settings.raw_events_base_rel_dir,
-            max_events_per_file=settings.max_events_per_file,
-        )
-    except OSError as exc:
-        logger.exception("failed to store raw events")
-        raise HTTPException(status_code=500, detail="failed to store raw events") from exc
-    except ValueError as exc:
-        logger.exception("invalid storage configuration")
-        raise HTTPException(status_code=500, detail="invalid storage configuration") from exc
-
     kafka_events = [event.dict(exclude_none=True) for event in payload.events]
-    publish_collect_payload(sdk_key=payload.sdk_key.strip(), events=kafka_events)
+
+    if settings.collect_direct_raw_enabled:
+        try:
+            store_result = append_raw_events_partitioned(
+                sdk_key=payload.sdk_key,
+                events=payload.events,
+                base_dir=settings.raw_events_base_abs_dir,
+                base_rel_dir=settings.raw_events_base_rel_dir,
+                max_events_per_file=settings.max_events_per_file,
+            )
+            stored_dir = store_result.stored_dir_rel
+            stored_count = store_result.stored_count
+        except OSError as exc:
+            logger.exception("failed to store raw events")
+            raise HTTPException(status_code=500, detail="failed to store raw events") from exc
+        except ValueError as exc:
+            logger.exception("invalid storage configuration")
+            raise HTTPException(status_code=500, detail="invalid storage configuration") from exc
+    else:
+        stored_dir = f"kafka://{settings.kafka_topic_raw_events}"
+        stored_count = event_count
+
+    published = publish_collect_payload(sdk_key=payload.sdk_key.strip(), events=kafka_events)
+    if settings.collect_require_kafka_publish and not published:
+        raise HTTPException(status_code=503, detail="failed to publish to kafka")
 
     return CollectResponse(
         success=True,
-        received_events=store_result.stored_count,
-        stored_dir=store_result.stored_dir_rel,
+        received_events=stored_count,
+        stored_dir=stored_dir,
     )

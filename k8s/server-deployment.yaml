@@ -23,6 +23,9 @@ spec:
         - name: server
           image: clicklake-server:latest
           imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY:-4}
           ports:
             - name: http
               containerPort: 8000
@@ -102,6 +105,21 @@ spec:
                 configMapKeyRef:
                   name: clicklake-config
                   key: KAFKA_PUBLISH_TIMEOUT_SECONDS
+            - name: COLLECT_DIRECT_RAW_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: COLLECT_DIRECT_RAW_ENABLED
+            - name: COLLECT_REQUIRE_KAFKA_PUBLISH
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: COLLECT_REQUIRE_KAFKA_PUBLISH
+            - name: WEB_CONCURRENCY
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: WEB_CONCURRENCY
             - name: SLACK_ENABLE_SIGNATURE_VALIDATION
               valueFrom:
                 configMapKeyRef:

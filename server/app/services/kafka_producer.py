@@ -101,17 +101,29 @@ def publish_collect_payload(sdk_key: str, events: list[dict[str, Any]]) -> bool:
     topic = settings.kafka_topic_raw_events
     message = _build_message(sdk_key=sdk_key, events=events)
 
-    try:
-        future = producer.send(topic, value=message)
-        metadata = future.get(timeout=settings.kafka_publish_timeout_seconds)
+    def _on_success(metadata: Any) -> None:
         logger.info(
             "kafka publish success topic=%s partition=%s offset=%s events=%d sdk_key=%s",
             topic,
-            metadata.partition,
-            metadata.offset,
+            getattr(metadata, "partition", "?"),
+            getattr(metadata, "offset", "?"),
             len(events),
             sdk_key,
         )
+
+    def _on_error(exc: Exception) -> None:
+        logger.warning(
+            "kafka publish async failed topic=%s events=%d sdk_key=%s reason=%s",
+            topic,
+            len(events),
+            sdk_key,
+            str(exc),
+        )
+
+    try:
+        future = producer.send(topic, value=message)
+        future.add_callback(_on_success)
+        future.add_errback(_on_error)
         return True
     except Exception as exc:
         logger.warning(

@@ -1,7 +1,7 @@
 # Click Lake Collector (FastAPI MVP)
 
 간단한 이벤트 수집용 FastAPI 서버
-SDK가 전송한 payload를 받고, 날짜 파티션 + 롤링 JSONL로 raw 저장
+SDK가 전송한 payload를 Kafka로 수집하고, downstream consumer에서 raw/bronze sink를 담당
 
 ## 구조
 ```
@@ -48,7 +48,7 @@ pip install -r requirements.txt
 
 ## 실행
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 ## Docker 실행
@@ -70,7 +70,7 @@ Kafka 포함 compose 확인:
 
 롤링 크기 변경(예: 500)
 ```bash
-MAX_EVENTS_PER_FILE=500 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+MAX_EVENTS_PER_FILE=500 uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 ## 엔드포인트
@@ -125,17 +125,9 @@ Slack slash command (1단계 조회형):
     ```
   - 응답 예시
     ```json
-    {"success": true, "received_events": 1, "stored_dir": "server/data/raw_events/date=2026-04-15"}
+    {"success": true, "received_events": 1, "stored_dir": "kafka://clicklake.events.raw"}
     ```
-  - 저장 형식(JSONL)
-    ```json
-    {"received_at":"2026-04-12T10:00:00Z","sdk_key":"clk_live_cp001","event":{"event_id":"evt_001","event_type":"page_view","event_time":"2026-04-12T10:00:00Z","session_id":"sess_001","page_url":"/"}}
-    ```
-    요청의 `events` 배열은 이벤트 1개당 JSONL 1줄로 append 됩니다.
-  - 파일 롤링
-    - 기본 `max_events_per_file=1000`
-    - 파일이 1000줄에 도달하면 `events-0002.jsonl` 같은 다음 파일로 저장
-  - Kafka publish 병행
+  - Kafka-only 수집
     - topic: `clicklake.events.raw`
     - 메시지 구조:
       ```json
@@ -145,7 +137,7 @@ Slack slash command (1단계 조회형):
         "events": [ ... ]
       }
       ```
-    - 정책: raw 저장 성공 시 API는 성공 응답을 유지하고, Kafka publish 실패는 warning 로그만 남깁니다.
+    - 정책: Kafka publish enqueue 실패 시 `/collect`는 `503`을 반환합니다.
 
 ### Gold read-only API 데이터 소스
 - 현재 단계에서는 Databricks SQL Warehouse를 직접 조회합니다.
@@ -176,6 +168,9 @@ KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 KAFKA_TOPIC_RAW_EVENTS=clicklake.events.raw
 KAFKA_CLIENT_ID=clicklake-server
 KAFKA_PUBLISH_TIMEOUT_SECONDS=3
+COLLECT_DIRECT_RAW_ENABLED=false
+COLLECT_REQUIRE_KAFKA_PUBLISH=true
+WEB_CONCURRENCY=4
 ```
 
 Slack 관련 옵션:
