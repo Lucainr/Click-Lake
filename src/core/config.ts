@@ -5,7 +5,8 @@ const defaultConfig = {
   autoPageView: true,
   flushIntervalMs: 3000,
   batchSize: 5,
-  maxRetries: 2
+  maxRetries: 2,
+  onError: undefined as SDKConfig["onError"]
 }
 
 let config: Required<SDKConfig> | null = null
@@ -30,7 +31,8 @@ export const setConfig = (input: SDKConfig) => {
     autoPageView: input.autoPageView ?? defaultConfig.autoPageView,
     flushIntervalMs: input.flushIntervalMs ?? defaultConfig.flushIntervalMs,
     batchSize: input.batchSize ?? defaultConfig.batchSize,
-    maxRetries: input.maxRetries ?? defaultConfig.maxRetries
+    maxRetries: input.maxRetries ?? defaultConfig.maxRetries,
+    onError: input.onError ?? defaultConfig.onError
   }
 }
 

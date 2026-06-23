@@ -97,6 +97,7 @@ export interface SDKConfig {
   flushIntervalMs?: number
   batchSize?: number
   maxRetries?: number
+  onError?: (errors: string[], eventType: string) => void
 }
 
 export type PromotionViewInput = Pick<

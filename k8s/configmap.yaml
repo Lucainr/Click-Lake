@@ -34,6 +34,7 @@ data:
   REDIS_URL: "redis://clicklake-redis-service:6379/0"
 
   # Slack slash command
+  COLLECT_MAX_EVENTS_PER_REQUEST: "500"
   SLACK_ENABLE_SIGNATURE_VALIDATION: "true"
 
   # Dashboard runtime (Vite dev server proxy mode)

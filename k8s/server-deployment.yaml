@@ -120,6 +120,11 @@ spec:
                 configMapKeyRef:
                   name: clicklake-config
                   key: WEB_CONCURRENCY
+            - name: COLLECT_MAX_EVENTS_PER_REQUEST
+              valueFrom:
+                configMapKeyRef:
+                  name: clicklake-config
+                  key: COLLECT_MAX_EVENTS_PER_REQUEST
             - name: SLACK_ENABLE_SIGNATURE_VALIDATION
               valueFrom:
                 configMapKeyRef:
@@ -136,6 +141,13 @@ spec:
                 configMapKeyRef:
                   name: clicklake-config
                   key: REDIS_URL
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
           readinessProbe:
             httpGet:
               path: /health

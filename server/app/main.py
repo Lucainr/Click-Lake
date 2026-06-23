@@ -72,6 +72,11 @@ async def collect(payload: CollectRequest) -> CollectResponse:
         raise HTTPException(
             status_code=400, detail="events must contain at least one item"
         )
+    if len(payload.events) > settings.collect_max_events_per_request:
+        raise HTTPException(
+            status_code=400,
+            detail=f"events must not exceed {settings.collect_max_events_per_request} items per request",
+        )
 
     event_count = len(payload.events)
 

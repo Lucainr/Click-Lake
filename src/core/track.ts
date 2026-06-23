@@ -48,6 +48,7 @@ export const track = (eventType: EventType, properties: Record<string, unknown> 
   const errors = validateEvent(payload)
   if (errors.length) {
     warn("validation failed", errors)
+    cfg.onError?.(errors, eventType)
     return
   }
 

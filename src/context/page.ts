@@ -14,7 +14,7 @@ export const getPageContext = (): PageContext => {
       page_type: null
     }
   }
-  const page_url = `${window.location.pathname}${window.location.search}`
+  const page_url = window.location.href
   const referrer_url = document.referrer || null
   const page_title = document.title || null
   return {
