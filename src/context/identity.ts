@@ -2,6 +2,7 @@ import { makeId } from "../utils/uuid"
 
 const ANON_KEY = "clicklake_anonymous_id"
 let userId: string | null = null
+let memoryAnonId: string | undefined
 
 const getStorage = () => {
   try {
@@ -13,7 +14,9 @@ const getStorage = () => {
 
 export const getAnonymousId = (): string => {
   const storage = getStorage()
-  if (!storage) return makeId("anon")
+  if (!storage) {
+    return (memoryAnonId ??= makeId("anon"))
+  }
   const existing = storage.getItem(ANON_KEY)
   if (existing) return existing
   const created = makeId("anon")
